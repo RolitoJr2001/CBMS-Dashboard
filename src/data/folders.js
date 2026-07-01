@@ -1,0 +1,133 @@
+// CBMS Folder Directory (Google Drive style)
+export const folders = [
+  {
+    id: 1,
+    name: "01 Admin Matters",
+    items: 24,
+    updated: "2026-06-18",
+    link: "https://drive.google.com/drive/folders/1jLUfq8JCvBQxU341JF1tzu4H8hw5H3V9?usp=drive_link",
+  },
+  {
+    id: 2,
+    name: "02 Communications",
+    items: 38,
+    updated: "2026-06-19",
+    link: "https://drive.google.com/drive/folders/1XpULeN4j_Izp3cNJBQ70TdMeGt7hdtPW?usp=drive_link",
+  },
+  {
+    id: 3,
+    name: "03 Procurement",
+    items: 17,
+    updated: "2026-06-15",
+    link: "https://drive.google.com/drive/folders/1a-UVMjMlOQkUuWsKnLROQqkvaxvUomFs?usp=drive_link",
+  },
+  {
+    id: 4,
+    name: "04 Monitoring Trackers",
+    items: 52,
+    updated: "2026-06-20",
+    link: "https://drive.google.com/drive/folders/1ITccseHS-F-hufx7q6b-OnJW3O_jwiXn?usp=drive_link",
+  },
+  {
+    id: 5,
+    name: "05 Personnel Files",
+    items: 61,
+    updated: "2026-06-10",
+    link: "https://drive.google.com/drive/folders/1PaYSIfuh4Nqx55x32CeOjuiHP3_F1xjl?usp=drive_link",
+  },
+  {
+    id: 6,
+    name: "06 Operations",
+    items: 29,
+    updated: "2026-06-17",
+    link: "https://drive.google.com/drive/folders/1pOP_DyGNtpt-VSqkjsP-jw-6LIPfdBqs?usp=drive_link",
+  },
+];
+
+// CBMS Monitoring Dashboard sheets
+export const monitoringSheets = [
+  {
+    id: 1,
+    name: "2026 Division Monitoring Sheet",
+    type: "Google Sheets",
+    status: "Active",
+    link: "https://docs.google.com/spreadsheets/d/1rV8jk65M8pa1cqAUzUCxb-QV_pU0T1ne/edit?usp=sharing&ouid=110531174839136560980&rtpof=true&sd=true",
+  },
+    {
+    id: 2,
+    name: "CBMS New-email MONITORING",
+    type: "Google Sheets",
+    status: "Active",
+    link: "https://drive.google.com/drive/folders/1rS5uEdfTQ5s7hcvsLevforhutvmg7yt9",
+  },
+  {
+    id: 3,
+    name: "CBMS old-email MONITORING",
+    type: "Google Sheets",
+    status: "Active",
+    link: "https://drive.google.com/drive/folders/1Ojy80IRGkRs02OBMS22lC5eSzZc3EMxT",
+  },
+  {
+    id: 4,
+    name: "CBMS 01 Admin Matters 2026",
+    type: "Google Sheets",
+    status: "Active",
+    link: "https://drive.google.com/drive/folders/1jLUfq8JCvBQxU341JF1tzu4H8hw5H3V9",
+  },
+  {
+    id: 5,
+    name: "CBMS 02 Communications 2026",
+    type: "Google Sheets",
+    status: "Active",
+    link: "https://drive.google.com/drive/folders/1XpULeN4j_Izp3cNJBQ70TdMeGt7hdtPW",
+  },
+  {
+    id: 6,
+    name: "CBMS 03 Procurement 2026",
+    type: "Google Sheets",
+    status: "Active",
+    link: "https://drive.google.com/drive/folders/1a-UVMjMlOQkUuWsKnLROQqkvaxvUomFs",
+  },
+  {
+    id: 7,
+    name: "CBMS 04 Monitoring Trackers 2026",
+    type: "Google Sheets",
+    status: "Active",
+    link: "https://drive.google.com/drive/folders/1ITccseHS-F-hufx7q6b-OnJW3O_jwiXn",
+  },
+  {
+    id: 8,
+    name: "CBMS 05 Personnel Files 2026",
+    type: "Google Sheets",
+    status: "Active",
+    link: "https://drive.google.com/drive/folders/1PaYSIfuh4Nqx55x32CeOjuiHP3_F1xjl",
+  },
+    {
+    id: 9,
+    name: "CBMS 06 Operations 2026",
+    type: "Google Sheets",
+    status: "Active",
+    link: "https://drive.google.com/drive/folders/1ITccseHS-F-hufx7q6b-OnJW3O_jwiXn",
+  },
+  {
+    id: 10,
+    name: "CBMS Data Processing Monitoring Worksheet",
+    type: "Google Sheets",
+    status: "Active",
+    link: "https://docs.google.com/spreadsheets/d/1ib_v3BRvSW1w5hQerQWTBU6oO-V7dmLkBlb7wZePaCI/edit?usp=sharing",
+  },
+  {
+    id: 11,
+    name: "CBMS Tablet_Inventory_System",
+    type: "Google Sheets",
+    status: "Active",
+    link: "https://docs.google.com/spreadsheets/d/1OCLK86EHOm7PMYrEvSoQZDRQykWkaggA1gMrtBkVF_M/edit?gid=518795127#gid=518795127",
+  },
+    {
+    id: 12,
+    name: "Form 23 Checklist",
+    type: "Google Sheets",
+    status: "Active",
+    link: "https://docs.google.com/spreadsheets/d/1qurrac1-x-BTVCXVyWHOnQ7T5HzUjsFrKNbAp93t6gU/edit?gid=0#gid=0",
+  },
+];

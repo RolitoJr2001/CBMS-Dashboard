@@ -1,0 +1,71 @@
+import {
+  FaCalendarAlt, FaGoogleDrive, FaTable, FaClipboardCheck,
+  FaChartLine, FaFileAlt, FaBook, FaAddressBook,
+} from "react-icons/fa";
+
+export const quickLinks = [
+  {
+    id: 1,
+    label: "Google Calendar",
+    description: "View schedules, meetings, and submission deadlines.",
+    icon: FaCalendarAlt,
+    href: "https://calendar.google.com",
+    external: true,
+  },
+  {
+    id: 2,
+    label: "Google Drive",
+    description: "Access shared CBMS folders and working files.",
+    icon: FaGoogleDrive,
+    href: "https://drive.google.com/drive/folders/1rS5uEdfTQ5s7hcvsLevforhutvmg7yt9",
+    external: true,
+  },
+  {
+    id: 3,
+    label: "Google Sheets",
+    description: "Open monitoring trackers and data sheets.",
+    icon: FaTable,
+    href: "https://sheets.google.com",
+    external: true,
+  },
+  {
+    id: 4,
+    label: "CBMS Checklist",
+    description: "Track data turnover requirement compliance.",
+    icon: FaClipboardCheck,
+    href: "#checklist",
+    external: false,
+  },
+  {
+    id: 5,
+    label: "Monitoring Dashboard",
+    description: "Review status of all active monitoring sheets.",
+    icon: FaChartLine,
+    href: "#monitoring",
+    external: false,
+  },
+  {
+    id: 6,
+    label: "Document Tracking",
+    description: "Track incoming and outgoing documents.",
+    icon: FaFileAlt,
+    href: "#document-tracking",
+    external: false,
+  },
+  {
+    id: 7,
+    label: "Analytics",
+    description: "Browse CBMS compliance analytics and reports.",
+    icon: FaBook,
+    href: "#analytics",
+    external: false,
+  },
+  {
+    id: 8,
+    label: "Announcements",
+    description: "View latest CBMS notices and bulletins.",
+    icon: FaAddressBook,
+    href: "#announcements",
+    external: false,
+  },
+];
