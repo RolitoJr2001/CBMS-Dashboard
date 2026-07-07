@@ -3,12 +3,13 @@ import { supabase } from "../lib/supabase";
 // ─── Map DB row → app shape ───────────────────────────────────
 function fromDb(row) {
   return {
-    id:          row.id,
-    title:       row.title,
-    date:        row.date,
-    time:        row.time,
-    type:        row.type,
-    description: row.description || "",
+    id:                row.id,
+    title:             row.title,
+    date:              row.date,
+    time:              row.time,
+    type:              row.type,
+    description:       row.description || "",
+    assignedPersonnel: row.assigned_personnel || "",
   };
 }
 
@@ -24,9 +25,16 @@ export async function fetchEvents() {
 
 // ─── Add event ────────────────────────────────────────────────
 export async function insertEvent(ev, userId) {
+  const payload = {
+    ...ev,
+    assigned_personnel: ev.assignedPersonnel || "",
+    created_by: userId,
+  };
+  delete payload.assignedPersonnel;
+
   const { data, error } = await supabase
     .from("calendar_events")
-    .insert({ ...ev, created_by: userId })
+    .insert(payload)
     .select()
     .single();
   if (error) throw error;
@@ -35,9 +43,15 @@ export async function insertEvent(ev, userId) {
 
 // ─── Update event ────────────────────────────────────────────
 export async function patchEvent(id, changes) {
+  const payload = { ...changes };
+  if (Object.prototype.hasOwnProperty.call(payload, "assignedPersonnel")) {
+    payload.assigned_personnel = payload.assignedPersonnel || "";
+    delete payload.assignedPersonnel;
+  }
+
   const { data, error } = await supabase
     .from("calendar_events")
-    .update(changes)
+    .update(payload)
     .eq("id", id)
     .select()
     .single();

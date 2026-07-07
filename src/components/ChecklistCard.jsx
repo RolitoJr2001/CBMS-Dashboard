@@ -44,6 +44,7 @@ export default function ChecklistCard() {
   }
 
   async function handleSave() {
+    if (!isAdmin) return;
     if (!validate()) return;
     setSaving(true); setSaveErr("");
     try {
@@ -64,6 +65,7 @@ export default function ChecklistCard() {
   }
 
   async function handleDelete(id) {
+    if (!isAdmin) return;
     if (!window.confirm("Delete this requirement?")) return;
     try { await deleteRequirement(id); }
     catch (err) { alert("Error: " + err.message); }

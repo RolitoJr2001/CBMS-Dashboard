@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { FaSearch, FaUserCircle, FaBars, FaTimes } from "react-icons/fa";
 import { MdShield } from "react-icons/md";
+import { useApp } from "../context/AppContext";
 
 const navItems = [
   { label: "Home",                 anchor: null },
@@ -34,6 +35,9 @@ export default function Navbar() {
     if (searchOpen) setTimeout(() => searchRef.current?.focus(), 50);
   }, [searchOpen]);
 
+  const { user } = useApp();
+  const isAdmin = user?.role === "admin";
+
   function handleSearch(e) {
     e.preventDefault();
     if (!searchQuery.trim()) return;
@@ -45,8 +49,12 @@ export default function Navbar() {
       document: "document-tracking", tracking: "document-tracking", incoming: "document-tracking", outgoing: "document-tracking",
       analytics: "analytics", reports: "analytics",
       announcements: "announcements",
-      links: "quick-access", access: "quick-access",
+      links: "quick-access", access:  "quick-access",
     };
+    if (!isAdmin) {
+      delete sectionMap.links;
+      delete sectionMap.access;
+    }
     const match = Object.entries(sectionMap).find(([key]) => q.includes(key));
     if (match) scrollTo(match[1]);
     setSearchOpen(false);

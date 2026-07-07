@@ -1,5 +1,18 @@
 import { supabase } from "../lib/supabase";
 
+function getUserFilterValues(user) {
+  return [user?.username, user?.name, user?.full_name, user?.fullName]
+    .filter(Boolean)
+    .map(value => String(value).trim().toLowerCase());
+}
+
+function matchesAssignedUser(doc, user) {
+  const assignedValue = String(doc?.assignedPersonnel || "").trim().toLowerCase();
+  if (!assignedValue) return false;
+  const values = getUserFilterValues(user);
+  return values.includes(assignedValue);
+}
+
 // ─── Map DB row → app shape ───────────────────────────────────
 function fromDb(row) {
   return {
@@ -29,14 +42,44 @@ function fromDb(row) {
   };
 }
 
-// ─── Fetch all documents with their history ───────────────────
-export async function fetchDocuments() {
-  const { data, error } = await supabase
+// ─── Fetch documents with their history ─────────────────────
+export async function fetchDocuments(user = null) {
+  const { data: docs, error: docsError } = await supabase
     .from("documents")
-    .select(`*, document_history(office, action, timestamp)`)
+    .select("id, tracking_number, title, category, subject, date_received, date_released, originating_office, destination_office, current_office, assigned_personnel, status, remarks, attachment_url")
     .order("date_received", { ascending: false });
-  if (error) throw error;
-  return data.map(fromDb);
+  if (docsError) throw docsError;
+
+  const ids = (docs || []).map(doc => doc.id).filter(Boolean);
+  let historyByDocumentId = {};
+
+  if (ids.length > 0) {
+    const { data: historyRows, error: historyError } = await supabase
+      .from("document_history")
+      .select("document_id, office, action, timestamp")
+      .in("document_id", ids)
+      .order("timestamp", { ascending: true });
+
+    if (historyError) throw historyError;
+
+    historyByDocumentId = (historyRows || []).reduce((acc, row) => {
+      const key = row.document_id;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push({
+        office: row.office,
+        timestamp: row.timestamp
+          ? new Date(row.timestamp).toLocaleString("sv-SE").replace("T", " ").slice(0, 16)
+          : "",
+        action: row.action,
+      });
+      return acc;
+    }, {});
+  }
+
+  return (docs || []).map(doc => fromDb({
+    ...doc,
+    document_history: historyByDocumentId[doc.id] || [],
+  }));
 }
 
 // ─── Check for duplicate tracking number ─────────────────────
@@ -72,29 +115,37 @@ export async function insertDocument(doc, userId) {
   const { data, error } = await supabase
     .from("documents")
     .insert(payload)
-    .select()
-    .single();
+    .select("id")
+    .maybeSingle();
   if (error) throw error;
 
-  // Insert first history entry
-  await supabase.from("document_history").insert({
-    document_id: data.id,
-    office:      doc.originatingOffice,
-    action:      "Received",
-    created_by:  userId,
-  });
+  const createdId = data?.id;
+  if (!createdId) throw new Error("Unable to create the document record.");
 
-  return data.id;
+  // Insert first history entry
+  try {
+    await supabase.from("document_history").insert({
+      document_id: createdId,
+      office:      doc.originatingOffice,
+      action:      "Received",
+      created_by:  userId,
+    });
+  } catch (historyError) {
+    console.warn("Document history write skipped:", historyError?.message || historyError);
+  }
+
+  return createdId;
 }
 
 // ─── Update document (+ add history if office changed) ────────
 export async function patchDocument(id, changes, userId) {
   // Fetch current to compare office
-  const { data: current } = await supabase
+  const { data: current, error: currentError } = await supabase
     .from("documents")
     .select("current_office, status")
     .eq("id", id)
     .single();
+  if (currentError) throw currentError;
 
   const payload = {};
   const fieldMap = {
@@ -124,21 +175,52 @@ export async function patchDocument(id, changes, userId) {
     .from("documents")
     .update(payload)
     .eq("id", id)
-    .select(`*, document_history(office, action, timestamp)`)
-    .single();
+    .select("id, tracking_number, title, category, subject, date_received, date_released, originating_office, destination_office, current_office, assigned_personnel, status, remarks, attachment_url")
+    .maybeSingle();
   if (error) throw error;
 
   // Add history entry if office changed
   if (changes.currentOffice && current && changes.currentOffice !== current.current_office) {
-    await supabase.from("document_history").insert({
-      document_id: id,
-      office:      changes.currentOffice,
-      action:      changes.status || "Updated",
-      created_by:  userId,
-    });
+    try {
+      await supabase.from("document_history").insert({
+        document_id: id,
+        office:      changes.currentOffice,
+        action:      changes.status || "Updated",
+        created_by:  userId,
+      });
+    } catch (historyError) {
+      console.warn("Document history write skipped:", historyError?.message || historyError);
+    }
   }
 
-  return fromDb(data);
+  const { data: historyRows, error: historyError } = await supabase
+    .from("document_history")
+    .select("office, action, timestamp")
+    .eq("document_id", id)
+    .order("timestamp", { ascending: true });
+  if (historyError) throw historyError;
+
+  const updatedRow = data || {
+    id,
+    tracking_number: payload.tracking_number ?? null,
+    title: payload.title ?? null,
+    category: payload.category ?? null,
+    subject: payload.subject ?? null,
+    date_received: payload.date_received ?? null,
+    date_released: payload.date_released ?? null,
+    originating_office: payload.originating_office ?? null,
+    destination_office: payload.destination_office ?? null,
+    current_office: payload.current_office ?? null,
+    assigned_personnel: payload.assigned_personnel ?? null,
+    status: payload.status ?? null,
+    remarks: payload.remarks ?? null,
+    attachment_url: payload.attachment_url ?? null,
+  };
+
+  return fromDb({
+    ...updatedRow,
+    document_history: historyRows || [],
+  });
 }
 
 // ─── Delete document (cascade deletes history) ────────────────

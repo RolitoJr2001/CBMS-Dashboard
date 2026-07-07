@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MdLockOutline, MdPerson, MdVpnKey } from "react-icons/md";
 import { useApp } from "../context/AppContext";
+import { sendPasswordReset } from "../services/authService";
 import cbmsLogo from "../../Logos/DASMO_OFFICIAL LOGO.png";
 
 export default function Login() {
@@ -9,11 +10,14 @@ export default function Login() {
   const { login } = useApp();
   const [form, setForm]     = useState({ username: "", password: "" });
   const [error, setError]   = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setSuccess("");
     setLoading(true);
     try {
       await login(form.username.trim(), form.password);
@@ -22,6 +26,26 @@ export default function Login() {
       setError(err.message || "Invalid username or password.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    const username = form.username.trim();
+    if (!username) {
+      setError("Enter your username first.");
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setResetLoading(true);
+    try {
+      await sendPasswordReset(username);
+      setSuccess("Password reset email sent. Please check your inbox.");
+    } catch (err) {
+      setError(err.message || "Unable to send reset email.");
+    } finally {
+      setResetLoading(false);
     }
   }
 
@@ -73,6 +97,7 @@ export default function Login() {
           </label>
 
           {error && <p className="text-sm text-red-500">{error}</p>}
+          {success && <p className="text-sm text-teal-600">{success}</p>}
 
           <button
             type="submit"
@@ -87,6 +112,17 @@ export default function Login() {
             ) : "Sign in"}
           </button>
         </form>
+
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={handleForgotPassword}
+            disabled={resetLoading}
+            className="text-sm font-medium text-teal-600 hover:text-teal-700 disabled:opacity-60"
+          >
+            {resetLoading ? "Sending..." : "Forgot password?"}
+          </button>
+        </div>
 
         <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
           <p className="font-semibold text-navy-900">Need access?</p>

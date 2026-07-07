@@ -21,6 +21,7 @@ function ProtectedRoute({ children }) {
   return user ? children : <Navigate to="/login" replace />;
 }
 
+// Main app router that loads the login page and protected dashboard view
 export default function App() {
   const { user, authLoading } = useApp();
 

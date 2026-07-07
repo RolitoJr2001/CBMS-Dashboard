@@ -41,6 +41,16 @@ export async function getSession() {
   return data.session;
 }
 
+// ─── Get all profiles for assignee dropdowns ─────────────────
+export async function fetchProfiles() {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, name, username")
+    .order("name", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
 // ─── Get full profile for a user id ──────────────────────────
 export async function getProfile(userId) {
   const { data, error } = await supabase
@@ -81,15 +91,22 @@ export function onAuthChange(callback) {
 // -> select user -> Reset password. This function is kept for
 // completeness but the UI does not need to expose it.
 export async function sendPasswordReset(username) {
+  const normalizedUsername = username?.trim().toLowerCase();
+  if (!normalizedUsername) {
+    throw new Error("Username is required.");
+  }
+
   const { data: email, error: lookupError } = await supabase.rpc(
     "get_email_for_username",
-    { p_username: username.trim().toLowerCase() }
+    { p_username: normalizedUsername }
   );
   if (lookupError || !email) {
     throw new Error("If that username exists, a reset link has been processed.");
   }
+
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${window.location.origin}/reset-password`,
   });
   if (error) throw error;
+  return true;
 }

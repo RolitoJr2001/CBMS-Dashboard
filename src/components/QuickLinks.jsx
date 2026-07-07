@@ -1,8 +1,14 @@
 import { motion } from "framer-motion";
 import { quickLinks } from "../data/quickLinks";
 import { FaExternalLinkAlt } from "react-icons/fa";
+import { useApp } from "../context/AppContext";
 
 export default function QuickLinks() {
+  const { user } = useApp();
+  const isAdmin = user?.role === "admin";
+  const allowedQuickLinks = isAdmin
+    ? quickLinks
+    : quickLinks.filter(link => ["dashboard", "calendar", "checklist", "monitoring", "announcements"].includes(link.id));
   function handleClick(e, link) {
     if (!link.external && link.href.startsWith("#")) {
       e.preventDefault();
@@ -12,7 +18,7 @@ export default function QuickLinks() {
   }
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-      {quickLinks.map((link, i) => {
+      {allowedQuickLinks.map((link, i) => {
         const Icon = link.icon;
         return (
           <motion.a

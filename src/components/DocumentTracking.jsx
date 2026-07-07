@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   FaFileAlt, FaPlus, FaEdit, FaTrash, FaTimes, FaCheck,
   FaSearch, FaFilter, FaHistory, FaInbox, FaPaperPlane,
   FaSpinner, FaCheckCircle, FaExclamationCircle, FaListAlt,
 } from "react-icons/fa";
 import { useApp } from "../context/AppContext";
+import { fetchPersonnel } from "../services/personnelService";
 
 const STATUS_OPTIONS   = ["Received", "In Process", "Forwarded", "Released", "Completed", "Returned"];
 const CATEGORY_OPTIONS = ["Agreement", "Compliance", "Memorandum", "Letter", "Report", "Order", "Form", "Other"];
@@ -18,8 +19,15 @@ const statusStyles = {
   Returned:     "bg-status-redBg text-status-red",
 };
 
+function getTrackingNumberPrefix() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const year = now.getFullYear();
+  return `CBMSD-${month}${year}-`;
+}
+
 const EMPTY_FORM = {
-  trackingNumber: "", title: "", category: "Letter", subject: "",
+  trackingNumber: getTrackingNumberPrefix(), title: "", category: "Letter", subject: "",
   dateReceived: new Date().toISOString().split("T")[0], dateReleased: "",
   originatingOffice: "", destinationOffice: "", currentOffice: "",
   assignedPersonnel: "", status: "Received", remarks: "",
@@ -34,8 +42,7 @@ function DocBadge({ status }) {
 }
 
 export default function DocumentTracking() {
-  const { documents, addDocument, updateDocument, deleteDocument, isDuplicateTrackingNumber, user } = useApp();
-  const isAdmin = user?.role === "admin";
+  const { documents, addDocument, updateDocument, deleteDocument, isDuplicateTrackingNumber } = useApp();
 
   const [showForm,      setShowForm]      = useState(false);
   const [editId,        setEditId]        = useState(null);
@@ -48,17 +55,61 @@ export default function DocumentTracking() {
   const [page,          setPage]          = useState(1);
   const [saving,        setSaving]        = useState(false);
   const [saveErr,       setSaveErr]       = useState("");
+  const [personnel,     setPersonnel]     = useState([]);
+  const [trackingPrefix, setTrackingPrefix] = useState(getTrackingNumberPrefix());
+  const [remarkDrafts, setRemarkDrafts] = useState({});
 
   const PER_PAGE = 8;
 
-  const totalIncoming   = documents.length;
-  const totalOutgoing   = documents.filter(d => d.dateReleased).length;
-  const inProcess       = documents.filter(d => d.status === "In Process").length;
-  const completed       = documents.filter(d => d.status === "Completed").length;
-  const recent          = [...documents].sort((a, b) => (b.dateReceived > a.dateReceived ? 1 : -1)).slice(0, 3);
+  useEffect(() => {
+    let mounted = true;
+    fetchPersonnel()
+      .then((data) => { if (mounted) setPersonnel(data); })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    const nextPrefix = getTrackingNumberPrefix();
+    setTrackingPrefix(nextPrefix);
+    setForm(f => {
+      const currentValue = f.trackingNumber || "";
+      const currentSuffix = currentValue.replace(/^CBMSD-\d{6}-/, "");
+      return {
+        ...f,
+        trackingNumber: currentValue && currentValue.startsWith("CBMSD-")
+          ? `${nextPrefix}${currentSuffix || ""}`
+          : `${nextPrefix}${currentValue || ""}`,
+      };
+    });
+  }, []);
+
+  const visibleDocuments = useMemo(() => {
+    return documents;
+  }, [documents]);
+
+  const canUpdateDocument = useMemo(() => {
+    return () => true;
+  }, []);
+
+  const totalIncoming   = visibleDocuments.length;
+  const totalOutgoing   = visibleDocuments.filter(d => d.dateReleased).length;
+  const inProcess       = visibleDocuments.filter(d => d.status === "In Process").length;
+  const completed       = visibleDocuments.filter(d => d.status === "Completed").length;
+  const recent          = [...visibleDocuments].sort((a, b) => (b.dateReceived > a.dateReceived ? 1 : -1)).slice(0, 3);
+
+  useEffect(() => {
+    setRemarkDrafts(prev => {
+      const next = {};
+      visibleDocuments.forEach(doc => {
+        next[doc.id] = prev[doc.id] ?? "";
+      });
+      return next;
+    });
+  }, [visibleDocuments]);
 
   const filtered = useMemo(() => {
-    return documents.filter(d => {
+    return visibleDocuments.filter(d => {
       const q = search.toLowerCase();
       const matchSearch = !q || [d.trackingNumber, d.title, d.currentOffice, d.status, d.dateReceived]
         .some(v => v?.toLowerCase().includes(q));
@@ -129,9 +180,32 @@ export default function DocumentTracking() {
     }
   }
 
-  const historyDoc = historyId ? documents.find(d => d.id === historyId) : null;
+  async function handleStatusChange(id, status) {
+    try {
+      await updateDocument(id, { status });
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  }
+
+  function handleRemarksDraft(id, value) {
+    setRemarkDrafts(prev => ({ ...prev, [id]: value }));
+  }
+
+  async function handleRemarksSubmit(id) {
+    try {
+      const value = (remarkDrafts[id] || "").trim();
+      await updateDocument(id, { remarks: value });
+      setRemarkDrafts(prev => ({ ...prev, [id]: "" }));
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  }
+
+  const historyDoc = historyId ? visibleDocuments.find(d => d.id === historyId) : null;
 
   return (
+    // Document tracking section for records and routing history
     <section id="document-tracking" className="w-full">
       <div className="bg-white rounded-xl border border-slate-100 overflow-hidden flex flex-col">
         {/* Section header */}
@@ -145,14 +219,12 @@ export default function DocumentTracking() {
               <p className="text-sm text-slate-500">Incoming and outgoing document monitoring</p>
             </div>
           </div>
-          {isAdmin && (
-            <button
-              onClick={openAdd}
-              className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg bg-navy-900 text-white hover:bg-navy-800 transition-colors self-start sm:self-auto"
-            >
-              <FaPlus className="text-xs" /> New Document
-            </button>
-          )}
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg bg-navy-900 text-white hover:bg-navy-800 transition-colors self-start sm:self-auto"
+          >
+            <FaPlus className="text-xs" /> New Document
+          </button>
         </div>
 
         <div className="p-5 space-y-6">
@@ -174,6 +246,7 @@ export default function DocumentTracking() {
               );
             })}
           </div>
+
 
           {/* Recently received */}
           {recent.length > 0 && (
@@ -207,7 +280,6 @@ export default function DocumentTracking() {
                   { key: "originatingOffice", label: "Originating Office *", type: "text" },
                   { key: "destinationOffice", label: "Destination Office", type: "text" },
                   { key: "currentOffice", label: "Current Office *", type: "text" },
-                  { key: "assignedPersonnel", label: "Assigned Personnel", type: "text" },
                 ].map(({ key, label, type }) => (
                   <div key={key}>
                     <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
@@ -220,6 +292,16 @@ export default function DocumentTracking() {
                     {errors[key] && <p className="text-xs text-status-red mt-0.5">{errors[key]}</p>}
                   </div>
                 ))}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Assigned Personnel</label>
+                  <select value={form.assignedPersonnel} onChange={e => setForm(f => ({ ...f, assignedPersonnel: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 outline-none focus:border-teal-400 bg-white">
+                    <option value="">Select personnel</option>
+                    {personnel.map(p => (
+                      <option key={p.id} value={p.name}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
                   <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
@@ -323,6 +405,7 @@ export default function DocumentTracking() {
                     <th className="py-3 px-4 font-medium">Current Office</th>
                     <th className="py-3 px-4 font-medium">Date Received</th>
                     <th className="py-3 px-4 font-medium">Status</th>
+                    <th className="py-3 px-4 font-medium">Remarks</th>
                     <th className="py-3 px-4 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
@@ -341,7 +424,43 @@ export default function DocumentTracking() {
                         <p className="text-xs text-slate-500">Assigned: {doc.assignedPersonnel || "—"}</p>
                       </td>
                       <td className="py-3 px-4 text-sm text-slate-600">{doc.dateReceived}</td>
-                      <td className="py-3 px-4"><DocBadge status={doc.status} /></td>
+                      <td className="py-3 px-4">
+                        <select
+                          value={doc.status}
+                          onChange={(e) => handleStatusChange(doc.id, e.target.value)}
+                          disabled={!canUpdateDocument(doc)}
+                          className="text-sm px-2 py-1 rounded border border-slate-200 bg-white disabled:cursor-not-allowed disabled:bg-slate-100"
+                        >
+                          {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                        </select>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={remarkDrafts[doc.id] ?? ""}
+                              onChange={(e) => handleRemarksDraft(doc.id, e.target.value)}
+                              placeholder={canUpdateDocument(doc) ? "Add remark" : "Remarks are read-only"}
+                              disabled={!canUpdateDocument(doc)}
+                              className="w-full min-w-[180px] px-2 py-1.5 text-sm rounded border border-slate-200 bg-white disabled:cursor-not-allowed disabled:bg-slate-100"
+                            />
+                            <button
+                              onClick={() => handleRemarksSubmit(doc.id)}
+                              disabled={!canUpdateDocument(doc)}
+                              className="px-2.5 py-1.5 text-xs font-medium rounded bg-navy-900 text-white hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Submit
+                            </button>
+                          </div>
+                          <div className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Remarks</p>
+                            <p className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">
+                              {(doc.remarks || "").trim() ? doc.remarks : "No remarks yet."}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-end gap-1">
                           <button
@@ -351,23 +470,29 @@ export default function DocumentTracking() {
                           >
                             <FaHistory className="text-xs" />
                           </button>
-                          {isAdmin && (
-                            <>
-                              <button onClick={() => openEdit(doc)} className="p-1.5 rounded text-slate-400 hover:text-teal-600 hover:bg-teal-50" title="Edit">
-                                <FaEdit className="text-xs" />
-                              </button>
-                              <button onClick={() => handleDelete(doc.id)} className="p-1.5 rounded text-slate-400 hover:text-status-red hover:bg-status-redBg" title="Delete">
-                                <FaTrash className="text-xs" />
-                              </button>
-                            </>
-                          )}
+                          <button
+                            onClick={() => openEdit(doc)}
+                            disabled={!canUpdateDocument(doc)}
+                            className="p-1.5 rounded text-slate-400 hover:text-teal-600 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            title="Edit"
+                          >
+                            <FaEdit className="text-xs" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(doc.id)}
+                            disabled={!canUpdateDocument(doc)}
+                            className="p-1.5 rounded text-slate-400 hover:text-status-red hover:bg-status-redBg disabled:cursor-not-allowed disabled:opacity-50"
+                            title="Delete"
+                          >
+                            <FaTrash className="text-xs" />
+                          </button>
                         </div>
                       </td>
                     </tr>
                   ))}
                   {paged.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-10 text-center text-slate-400 text-sm">
+                      <td colSpan={7} className="py-10 text-center text-slate-400 text-sm">
                         No documents found.
                       </td>
                     </tr>

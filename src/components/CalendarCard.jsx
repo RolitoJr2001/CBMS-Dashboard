@@ -1,15 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FaPlus, FaEdit, FaTrash, FaTimes, FaCheck, FaSpinner } from "react-icons/fa";
 import { useApp } from "../context/AppContext";
+import { fetchPersonnel } from "../services/personnelService";
 
 const typeColors = {
-  Deadline: "bg-status-redBg text-status-red",
-  Meeting:  "bg-teal-50 text-teal-700",
-  Review:   "bg-status-yellowBg text-status-yellow",
-  Briefing: "bg-navy-50 text-navy-700",
+  Deadline: "bg-[#fce8e6] text-[#c5221f] border-[#f4c7c3]",
+  Meeting:  "bg-[#e8f0fe] text-[#1a73e8] border-[#cfe1fb]",
+  Review:   "bg-[#fef7e0] text-[#b06000] border-[#fce8b2]",
+  Briefing: "bg-[#e6f4ea] text-[#188038] border-[#b7e1c5]",
+  "Training/Workshop": "bg-[#f3e8ff] text-[#7c3aed] border-[#ddd6fe]",
+  Leave: "bg-[#f1f5f9] text-[#475569] border-[#e2e8f0]",
+  Hearing: "bg-[#ffe4e6] text-[#be185d] border-[#fbcfe8]",
+  Seminar: "bg-[#ede9fe] text-[#6d28d9] border-[#d8b4fe]",
+  Announcement: "bg-[#e0f2fe] text-[#0369a1] border-[#bae6fd]",
 };
-const EVENT_TYPES = ["Deadline", "Meeting", "Review", "Briefing"];
-const EMPTY = { title: "", date: "", time: "", type: "Meeting", description: "" };
+const EVENT_TYPES = ["Deadline", "Meeting", "Review", "Briefing", "Training/Workshop", "Leave", "Hearing", "Seminar", "Announcement"];
+const EMPTY = { title: "", date: "", time: "", type: "Meeting", description: "", assignedPersonnel: "" };
 
 function fmtDate(s) {
   const d = new Date(s + "T00:00:00");
@@ -25,9 +31,18 @@ export default function CalendarCard() {
   const [errors,   setErrors]   = useState({});
   const [saving,   setSaving]   = useState(false);
   const [saveErr,  setSaveErr]  = useState("");
+  const [personnel, setPersonnel] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchPersonnel()
+      .then((data) => { if (mounted) setPersonnel(data); })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, []);
 
   function openAdd()  { setEditId(null); setForm(EMPTY); setErrors({}); setSaveErr(""); setShowForm(true); }
-  function openEdit(ev) { setEditId(ev.id); setForm({ title: ev.title, date: ev.date, time: ev.time, type: ev.type, description: ev.description || "" }); setErrors({}); setSaveErr(""); setShowForm(true); }
+  function openEdit(ev) { setEditId(ev.id); setForm({ title: ev.title, date: ev.date, time: ev.time, type: ev.type, description: ev.description || "", assignedPersonnel: ev.assignedPersonnel || "" }); setErrors({}); setSaveErr(""); setShowForm(true); }
 
   function validate() {
     const e = {};
@@ -38,6 +53,7 @@ export default function CalendarCard() {
   }
 
   async function handleSave() {
+    if (!isAdmin) return;
     if (!validate()) return;
     setSaving(true); setSaveErr("");
     try {
@@ -52,12 +68,14 @@ export default function CalendarCard() {
   }
 
   async function handleDelete(id) {
+    if (!isAdmin) return;
     if (!window.confirm("Delete this event?")) return;
     try { await deleteEvent(id); }
     catch (err) { alert("Error: " + err.message); }
   }
 
   return (
+    // Calendar widget section on the dashboard
     <div className="bg-white rounded-xl border border-slate-100 overflow-hidden flex flex-col">
       {/* Embedded calendar */}
       <div className="relative w-full" style={{ paddingBottom: "50%" }}>
@@ -104,6 +122,15 @@ export default function CalendarCard() {
                 </select>
               </div>
               <div>
+                <select value={form.assignedPersonnel} onChange={e => setForm(f => ({ ...f, assignedPersonnel: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 outline-none focus:border-teal-400 bg-white">
+                  <option value="">Select personnel</option>
+                  {personnel.map(p => (
+                    <option key={p.id} value={p.name}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
                 <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Description (optional)"
                   className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 outline-none focus:border-teal-400 bg-white" />
               </div>
@@ -134,9 +161,13 @@ export default function CalendarCard() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-navy-900 truncate">{ev.title}</p>
-                    <p className="text-xs text-slate-400">{ev.time}{ev.description ? ` · ${ev.description}` : ""}</p>
+                    <p className="text-xs text-slate-400">
+                      {ev.time}
+                      {ev.assignedPersonnel ? ` · Assigned to ${ev.assignedPersonnel}` : ""}
+                      {ev.description ? ` · ${ev.description}` : ""}
+                    </p>
                   </div>
-                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${typeColors[ev.type] || "bg-slate-100 text-slate-600"}`}>
+                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap border ${typeColors[ev.type] || "bg-slate-100 text-slate-600 border-slate-200"}`}>
                     {ev.type}
                   </span>
                   {isAdmin && (

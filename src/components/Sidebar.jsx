@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { MdShield, MdDashboard, MdCalendarToday, MdChecklist,
-         MdBarChart, MdCampaign, MdDescription, MdLink, MdClose, MdMenu, MdLogout } from "react-icons/md";
+         MdBarChart, MdCampaign, MdDescription, MdLink, MdClose, MdMenu, MdLogout, MdAssignment } from "react-icons/md";
 import { useApp } from "../context/AppContext";
 import cbmsLogo from "../../Logos/DASMO_OFFICIAL LOGO.png";
 
-const NAV = [
+const ALL_NAV = [
   { id: "dashboard",         label: "Dashboard",         icon: MdDashboard    },
   { id: "calendar",          label: "Schedule & Events", icon: MdCalendarToday },
   { id: "checklist",         label: "Requirements",      icon: MdChecklist    },
@@ -12,12 +12,18 @@ const NAV = [
   { id: "document-tracking", label: "Document Tracking", icon: MdDescription  },
   { id: "quick-access",      label: "Quick Links",       icon: MdLink         },
   { id: "announcements",     label: "Announcements",     icon: MdCampaign     },
+  { id: "tasks",             label: "Tasks",             icon: MdAssignment   },
 ];
 
 export default function Sidebar({ active, setActive }) {
   const [mobileOpen,   setMobileOpen]   = useState(false);
   const [loggingOut,   setLoggingOut]   = useState(false);
   const { user, logout } = useApp();
+  const isAdmin = user?.role === "admin";
+  const viewerNavIds = ["dashboard", "calendar", "checklist", "monitoring", "document-tracking", "announcements", "tasks"];
+  const NAV = isAdmin
+    ? ALL_NAV
+    : ALL_NAV.filter(item => viewerNavIds.includes(item.id));
 
   function nav(id) { setActive(id); setMobileOpen(false); }
 
@@ -88,6 +94,7 @@ export default function Sidebar({ active, setActive }) {
   );
 
   return (
+    // Main navigation sidebar for website sections
     <>
       {/* Desktop sidebar — sticky, full-height */}
       <aside className="sidebar hidden lg:flex flex-col bg-white border-r border-slate-100 h-screen sticky top-0">

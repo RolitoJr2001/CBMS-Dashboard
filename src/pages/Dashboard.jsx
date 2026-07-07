@@ -18,6 +18,7 @@ import QuickLinks       from "../components/QuickLinks";
 import Analytics        from "../components/Analytics";
 import Announcements    from "../components/Announcements";
 import DocumentTracking from "../components/DocumentTracking";
+import TaskPanel        from "../components/TaskPanel";
 import TopBar           from "../components/TopBar";
 import Sidebar          from "../components/Sidebar";
 
@@ -39,6 +40,7 @@ const trendData = [
   { month: "Jun", requirements: 10 },
 ];
 
+// Main dashboard page that renders the website sections and widgets
 export const PAGE_META = {
   dashboard:           { title: "Dashboard",            desc: "Track CBMS operations, compliance, and document activity in one place." },
   calendar:            { title: "Schedule & Events",    desc: "Monthly calendar · deadlines · meetings" },
@@ -47,6 +49,7 @@ export const PAGE_META = {
   "document-tracking": { title: "Document Tracking",    desc: "Incoming and outgoing document monitoring" },
   "quick-access":      { title: "Quick Links",          desc: "Jump straight to the tools you use most" },
   announcements:       { title: "Announcements",        desc: "Notice board for offices and field staff" },
+  tasks:               { title: "Tasks",                 desc: "Assigned work and follow-up items" },
   analytics:           { title: "Analytics",            desc: "Provincewide CBMS turnover progress" },
 };
 
@@ -294,13 +297,18 @@ function DashboardHome({ setActivePage, requirements, events, upcomingEvents, do
 // ─── Main Dashboard ──────────────────────────────────────────
 export default function Dashboard() {
   const { requirements, events, upcomingEvents, documents, user } = useApp();
-  const [activePage, setActivePage] = useState("dashboard");
+  const isAdmin = user?.role === "admin";
+  const initialPage = isAdmin ? "dashboard" : "document-tracking";
+  const [activePage, setActivePage] = useState(initialPage);
 
-  const meta = PAGE_META[activePage] || PAGE_META.dashboard;
+  const viewerPages = ["dashboard", "calendar", "checklist", "monitoring", "document-tracking", "announcements", "tasks"];
+  const allowedPages = isAdmin ? Object.keys(PAGE_META) : viewerPages;
+  const safeActivePage = allowedPages.includes(activePage) ? activePage : "document-tracking";
+  const meta = PAGE_META[safeActivePage] || PAGE_META.dashboard;
 
   // Render the content panel for the active tab
   function renderTab() {
-    switch (activePage) {
+    switch (safeActivePage) {
       case "dashboard":
         return (
           <DashboardHome
@@ -316,7 +324,7 @@ export default function Dashboard() {
       case "calendar":
         return (
           <>
-            <SectionHeader icon={MdCalendarToday} title="Schedule & Activities" sub="CBMS calendar · deadlines · meetings" />
+            <SectionHeader icon={MdCalendarToday} title="Schedule & Activities" sub="CBMS calendar · Deadlines · Meetings" />
             <CalendarCard />
           </>
         );
@@ -362,6 +370,9 @@ export default function Dashboard() {
       case "announcements":
         return <Announcements />;
 
+      case "tasks":
+        return <TaskPanel />;
+
       default:
         return null;
     }
@@ -369,7 +380,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <Sidebar active={activePage} setActive={setActivePage} />
+      <Sidebar active={safeActivePage} setActive={setActivePage} />
 
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar pageTitle={meta.title} pageDesc={meta.desc} onNavigate={setActivePage} />
