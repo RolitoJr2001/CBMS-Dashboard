@@ -1,0 +1,7 @@
+git add .
+
+git commit -m "update Vercel routing for password reset page" 
+
+git push origin main
+
+git status
