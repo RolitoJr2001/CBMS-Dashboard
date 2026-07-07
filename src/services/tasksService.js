@@ -85,6 +85,10 @@ export async function patchTask(id, changes) {
     payload.assigned_to = serializeAssignedTo(payload.assignedTo);
     delete payload.assignedTo;
   }
+  if (Object.prototype.hasOwnProperty.call(payload, "dueDate")) {
+    payload.due_date = payload.dueDate || null;
+    delete payload.dueDate;
+  }
   const { data, error } = await supabase
     .from("tasks")
     .update(payload)

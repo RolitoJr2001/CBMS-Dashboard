@@ -148,13 +148,7 @@ export function AppProvider({ children }) {
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!user) {
-      if (typeof window !== "undefined" && userRef.current?.id) {
-        window.localStorage.removeItem(getNotificationStorageKey(userRef.current));
-      }
-      setNotifications([]);
-      return;
-    }
+    if (!user) return;
 
     const stored = readStoredNotifications(user);
     setNotifications(stored);
@@ -327,7 +321,6 @@ export function AppProvider({ children }) {
     setRequirements([]);
     setDocuments([]);
     setTasks([]);
-    setNotifications([]);
   }, []);
 
   const formatNotificationTime = useCallback((value) => {
