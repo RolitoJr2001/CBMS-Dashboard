@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useApp } from "./context/AppContext";
 import Dashboard from "./pages/Dashboard";
+import ResetPassword from "./pages/ResetPassword";
 import Login from "./pages/Login";
 
 function ProtectedRoute({ children }) {
@@ -27,6 +28,10 @@ export default function App() {
 
   return (
     <Routes>
+      <Route
+        path="/reset-password"
+        element={<ResetPassword />}
+      />
       <Route
         path="/login"
         element={authLoading ? null : user ? <Navigate to="/" replace /> : <Login />}

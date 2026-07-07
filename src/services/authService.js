@@ -82,14 +82,17 @@ export function onAuthChange(callback) {
   return data.subscription;
 }
 
+function isSyntheticInternalEmail(email) {
+  if (!email) return false;
+  const normalized = String(email).trim().toLowerCase();
+  return normalized.endsWith(".local") || normalized.includes("cbms.local") || normalized.includes("username.cbms");
+}
+
 // ─── Password reset (username-based wrapper) ───────────────────
-// NOTE: Since the email on file is a synthetic, non-deliverable
-// placeholder, Supabase's reset email will not reach a real inbox
-// unless that domain is actually configured to forward somewhere.
-// For this internal dashboard, password resets are expected to be
-// done manually via Supabase Dashboard -> Authentication -> Users
-// -> select user -> Reset password. This function is kept for
-// completeness but the UI does not need to expose it.
+// This dashboard uses Supabase Auth accounts whose email addresses are
+// synthetic/internal values. Because of that, standard password-reset
+// emails are not a reliable delivery path for end users, so the app
+// now surfaces a clear fallback message and points users to the admin.
 export async function sendPasswordReset(username) {
   const normalizedUsername = username?.trim().toLowerCase();
   if (!normalizedUsername) {
@@ -104,9 +107,21 @@ export async function sendPasswordReset(username) {
     throw new Error("If that username exists, a reset link has been processed.");
   }
 
+  if (isSyntheticInternalEmail(email)) {
+    throw new Error(
+      "This dashboard uses internal Supabase accounts, so password reset emails cannot be delivered to the synthetic address on file. Please contact your DASMO-CBMS administrator to reset your password from the Supabase dashboard."
+    );
+  }
+
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${window.location.origin}/reset-password`,
   });
-  if (error) throw error;
+  if (error) {
+    if (error.message?.includes("User not found") || error.message?.includes("not found")) {
+      throw new Error("No account was found for that username.");
+    }
+    throw new Error("Unable to send a reset link right now. Please contact your administrator.");
+  }
   return true;
 }
+
