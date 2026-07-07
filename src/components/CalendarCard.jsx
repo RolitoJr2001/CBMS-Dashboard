@@ -15,11 +15,21 @@ const typeColors = {
   Announcement: "bg-[#e0f2fe] text-[#0369a1] border-[#bae6fd]",
 };
 const EVENT_TYPES = ["Deadline", "Meeting", "Review", "Briefing", "Training/Workshop", "Leave", "Hearing", "Seminar", "Announcement"];
-const EMPTY = { title: "", date: "", time: "", type: "Meeting", description: "", assignedPersonnel: "" };
+const EMPTY = { title: "", date: "", time: "", type: "Meeting", description: "", assignedPersonnel: [] };
 
 function fmtDate(s) {
   const d = new Date(s + "T00:00:00");
   return { mo: d.toLocaleDateString("en-US", { month: "short" }), day: d.getDate() };
+}
+
+function formatAssignedPersonnel(value) {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).join(", ");
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  return "";
 }
 
 export default function CalendarCard() {
@@ -32,6 +42,7 @@ export default function CalendarCard() {
   const [saving,   setSaving]   = useState(false);
   const [saveErr,  setSaveErr]  = useState("");
   const [personnel, setPersonnel] = useState([]);
+  const [selectedPersonnelName, setSelectedPersonnelName] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -41,8 +52,24 @@ export default function CalendarCard() {
     return () => { mounted = false; };
   }, []);
 
-  function openAdd()  { setEditId(null); setForm(EMPTY); setErrors({}); setSaveErr(""); setShowForm(true); }
-  function openEdit(ev) { setEditId(ev.id); setForm({ title: ev.title, date: ev.date, time: ev.time, type: ev.type, description: ev.description || "", assignedPersonnel: ev.assignedPersonnel || "" }); setErrors({}); setSaveErr(""); setShowForm(true); }
+  function openAdd()  { setEditId(null); setForm(EMPTY); setErrors({}); setSaveErr(""); setSelectedPersonnelName(""); setShowForm(true); }
+  function openEdit(ev) {
+    setEditId(ev.id);
+    setForm({
+      title: ev.title,
+      date: ev.date,
+      time: ev.time,
+      type: ev.type,
+      description: ev.description || "",
+      assignedPersonnel: Array.isArray(ev.assignedPersonnel)
+        ? ev.assignedPersonnel
+        : (ev.assignedPersonnel ? [ev.assignedPersonnel] : []),
+    });
+    setErrors({});
+    setSaveErr("");
+    setSelectedPersonnelName("");
+    setShowForm(true);
+  }
 
   function validate() {
     const e = {};
@@ -101,38 +128,78 @@ export default function CalendarCard() {
         {showForm && (
           <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-4 mb-4 space-y-3">
             <p className="text-sm font-semibold text-navy-900">{editId ? "Edit" : "New"} Event</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div className="sm:col-span-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
+              <div className="sm:col-span-6">
                 <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Title *"
-                  className={`w-full px-3 py-2 text-sm rounded-lg border outline-none focus:border-teal-400 bg-white ${errors.title ? "border-red-400" : "border-slate-200"}`} />
-                {errors.title && <p className="text-xs text-status-red">{errors.title}</p>}
+                  className={`w-full px-4 py-3 text-sm rounded-2xl border outline-none focus:border-teal-400 bg-white shadow-sm ${errors.title ? "border-red-400" : "border-slate-200"}`} />
+                {errors.title && <p className="mt-1 text-xs text-status-red">{errors.title}</p>}
               </div>
-              <div>
+              <div className="sm:col-span-3">
                 <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                  className={`w-full px-3 py-2 text-sm rounded-lg border outline-none focus:border-teal-400 bg-white ${errors.date ? "border-red-400" : "border-slate-200"}`} />
+                  className={`w-full px-4 py-3 text-sm rounded-2xl border outline-none focus:border-teal-400 bg-white shadow-sm ${errors.date ? "border-red-400" : "border-slate-200"}`} />
               </div>
-              <div>
+              <div className="sm:col-span-3">
                 <input type="time" value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
-                  className={`w-full px-3 py-2 text-sm rounded-lg border outline-none focus:border-teal-400 bg-white ${errors.time ? "border-red-400" : "border-slate-200"}`} />
+                  className={`w-full px-4 py-3 text-sm rounded-2xl border outline-none focus:border-teal-400 bg-white shadow-sm ${errors.time ? "border-red-400" : "border-slate-200"}`} />
               </div>
-              <div>
+              <div className="sm:col-span-3">
                 <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 outline-none focus:border-teal-400 bg-white">
+                  className="w-full px-4 py-3 text-sm rounded-2xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm">
                   {EVENT_TYPES.map(t => <option key={t}>{t}</option>)}
                 </select>
               </div>
-              <div>
-                <select value={form.assignedPersonnel} onChange={e => setForm(f => ({ ...f, assignedPersonnel: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 outline-none focus:border-teal-400 bg-white">
-                  <option value="">Select personnel</option>
-                  {personnel.map(p => (
-                    <option key={p.id} value={p.name}>{p.name}</option>
-                  ))}
-                </select>
+              <div className="sm:col-span-3">
+                <div className="flex gap-2">
+                  <select
+                    value={selectedPersonnelName}
+                    onChange={(e) => setSelectedPersonnelName(e.target.value)}
+                    className="flex-1 px-4 py-3 text-sm rounded-2xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm"
+                  >
+                    <option value="">Select personnel</option>
+                    {personnel
+                      .filter(p => !form.assignedPersonnel.includes(p.name))
+                      .map(p => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!selectedPersonnelName) return;
+                      setForm(f => ({
+                        ...f,
+                        assignedPersonnel: f.assignedPersonnel.includes(selectedPersonnelName)
+                          ? f.assignedPersonnel
+                          : [...f.assignedPersonnel, selectedPersonnelName],
+                      }));
+                      setSelectedPersonnelName("");
+                    }}
+                    className="inline-flex items-center justify-center px-4 py-3 rounded-2xl bg-teal-600 text-white hover:bg-teal-700 transition-colors shadow-sm"
+                  >
+                    <FaPlus className="text-sm" />
+                  </button>
+                </div>
+                {form.assignedPersonnel.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {form.assignedPersonnel.map(person => (
+                      <span key={person} className="inline-flex items-center gap-2 rounded-full bg-teal-100 text-teal-800 px-3 py-1 text-xs font-medium shadow-sm">
+                        {person}
+                        <button
+                          type="button"
+                          onClick={() => setForm(f => ({ ...f, assignedPersonnel: f.assignedPersonnel.filter(item => item !== person) }))}
+                          className="text-teal-700 hover:text-teal-900"
+                        >
+                          <FaTimes className="text-[10px]" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="sm:col-span-2">
-                <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Description (optional)"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 outline-none focus:border-teal-400 bg-white" />
+              <div className="sm:col-span-6">
+                <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Description (optional)"
+                  rows={3}
+                  className="w-full px-4 py-3 text-sm rounded-2xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm resize-none" />
               </div>
             </div>
             {saveErr && <p className="text-xs text-status-red">{saveErr}</p>}
@@ -163,7 +230,7 @@ export default function CalendarCard() {
                     <p className="text-sm font-medium text-navy-900 truncate">{ev.title}</p>
                     <p className="text-xs text-slate-400">
                       {ev.time}
-                      {ev.assignedPersonnel ? ` · Assigned to ${ev.assignedPersonnel}` : ""}
+                      {formatAssignedPersonnel(ev.assignedPersonnel) ? ` · Assigned to ${formatAssignedPersonnel(ev.assignedPersonnel)}` : ""}
                       {ev.description ? ` · ${ev.description}` : ""}
                     </p>
                   </div>

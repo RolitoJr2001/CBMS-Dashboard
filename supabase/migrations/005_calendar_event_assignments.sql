@@ -2,6 +2,9 @@
 ALTER TABLE public.calendar_events
   ADD COLUMN IF NOT EXISTS assigned_personnel TEXT DEFAULT '';
 
+ALTER TABLE public.calendar_events
+  ALTER COLUMN type SET DEFAULT 'Meeting';
+
 DO $$
 BEGIN
   IF EXISTS (

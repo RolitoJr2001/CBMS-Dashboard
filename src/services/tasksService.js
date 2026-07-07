@@ -6,12 +6,32 @@ function getUserFilterValues(user) {
     .map(value => String(value).trim().toLowerCase());
 }
 
+function normalizeAssignedTo(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.filter(Boolean);
+    } catch {
+      return [trimmed];
+    }
+  }
+  return [];
+}
+
+function serializeAssignedTo(value) {
+  const normalized = normalizeAssignedTo(value);
+  return normalized.length ? JSON.stringify(normalized) : "";
+}
+
 function fromDb(row) {
   return {
     id: row.id,
     title: row.title,
     description: row.description || "",
-    assignedTo: row.assigned_to || "",
+    assignedTo: normalizeAssignedTo(row.assigned_to || ""),
     assignedBy: row.assigned_by || "",
     dueDate: row.due_date || "",
     status: row.status || "Pending",
@@ -32,8 +52,8 @@ export async function fetchTasks(user = null) {
   const values = getUserFilterValues(user);
   return (data || [])
     .filter(task => {
-      const assignedValue = String(task.assigned_to || "").trim().toLowerCase();
-      return values.includes(assignedValue);
+      const assignedValues = normalizeAssignedTo(task.assigned_to || "");
+      return assignedValues.some(assigned => values.includes(String(assigned).trim().toLowerCase()));
     })
     .map(fromDb);
 }
@@ -42,7 +62,7 @@ export async function insertTask(task, userId, currentUsername) {
   const payload = {
     title: task.title,
     description: task.description || "",
-    assigned_to: task.assignedTo || "",
+    assigned_to: serializeAssignedTo(task.assignedTo),
     assigned_by: currentUsername || "",
     due_date: task.dueDate || null,
     status: task.status || "Pending",
@@ -61,6 +81,10 @@ export async function insertTask(task, userId, currentUsername) {
 
 export async function patchTask(id, changes) {
   const payload = { ...changes };
+  if (Object.prototype.hasOwnProperty.call(payload, "assignedTo")) {
+    payload.assigned_to = serializeAssignedTo(payload.assignedTo);
+    delete payload.assignedTo;
+  }
   const { data, error } = await supabase
     .from("tasks")
     .update(payload)

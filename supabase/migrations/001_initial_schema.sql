@@ -27,15 +27,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_username ON public.profiles(usern
 -- ─── CALENDAR EVENTS ─────────────────────────────────────────
 -- No changes — does not reference email/username
 CREATE TABLE IF NOT EXISTS public.calendar_events (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  title       TEXT NOT NULL,
-  date        DATE NOT NULL,
-  time        TEXT NOT NULL,
-  type        TEXT NOT NULL DEFAULT 'Meeting' CHECK (type IN ('Deadline', 'Meeting', 'Review', 'Briefing')),
-  description TEXT DEFAULT '',
-  created_by  UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ DEFAULT NOW()
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title               TEXT NOT NULL,
+  date                DATE NOT NULL,
+  time                TEXT NOT NULL,
+  type                TEXT NOT NULL DEFAULT 'Meeting' CHECK (type IN (
+    'Deadline',
+    'Meeting',
+    'Review',
+    'Briefing',
+    'Training/Workshop',
+    'Leave',
+    'Hearing',
+    'Seminar',
+    'Announcement'
+  )),
+  description         TEXT DEFAULT '',
+  assigned_personnel  TEXT DEFAULT '',
+  created_by          UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ─── REQUIREMENTS (Checklist) ─────────────────────────────────
