@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MdLockOutline, MdPerson, MdVpnKey } from "react-icons/md";
+import { MdLockOutline, MdPerson, MdVpnKey, MdVisibility, MdVisibilityOff } from "react-icons/md";
 import { useApp } from "../context/AppContext";
 import { sendPasswordReset } from "../services/authService";
 import cbmsLogo from "../../Logos/DASMO_OFFICIAL LOGO.png";
@@ -13,6 +13,7 @@ export default function Login() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -85,7 +86,7 @@ export default function Login() {
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
               <MdVpnKey className="text-slate-400" />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={form.password}
                 onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
                 className="w-full bg-transparent outline-none text-sm text-navy-900"
@@ -93,6 +94,14 @@ export default function Login() {
                 autoComplete="current-password"
                 disabled={loading}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="text-slate-400 hover:text-slate-600"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <MdVisibilityOff /> : <MdVisibility />}
+              </button>
             </div>
           </label>
 

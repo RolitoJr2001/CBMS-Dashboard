@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { MdLockOutline, MdVpnKey } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
+import { MdLockOutline, MdVpnKey, MdVisibility, MdVisibilityOff } from "react-icons/md";
 import { supabase } from "../lib/supabase";
 import cbmsLogo from "../../Logos/DASMO_OFFICIAL LOGO.png";
 
 export default function ResetPassword() {
+  const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleReset(e) {
     e.preventDefault();
@@ -14,12 +17,20 @@ export default function ResetPassword() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) {
-        setMessage(error.message || "Unable to update your password.");
-      } else {
-        setMessage("Password updated successfully.");
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) {
+        setMessage(updateError.message || "Unable to update your password.");
+        return;
       }
+
+      await supabase.auth.signOut({ scope: "global" });
+      await supabase.auth.getSession();
+
+      setMessage("Password updated successfully. Please sign in again.");
+      setPassword("");
+      navigate("/login", { replace: true });
+    } catch (err) {
+      setMessage(err.message || "Unable to update your password.");
     } finally {
       setLoading(false);
     }
@@ -47,7 +58,7 @@ export default function ResetPassword() {
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
               <MdVpnKey className="text-slate-400" />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-transparent outline-none text-sm text-navy-900"
@@ -55,6 +66,14 @@ export default function ResetPassword() {
                 autoComplete="new-password"
                 disabled={loading}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="text-slate-400 hover:text-slate-600"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <MdVisibilityOff /> : <MdVisibility />}
+              </button>
             </div>
           </label>
 
