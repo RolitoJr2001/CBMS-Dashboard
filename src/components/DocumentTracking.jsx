@@ -105,7 +105,7 @@ export default function DocumentTracking() {
     return () => true;
   }, []);
 
-  const totalIncoming   = visibleDocuments.length;
+  const totalIncoming   = visibleDocuments.filter(d => getDocumentDirection(d) === "Incoming").length;
   const totalOutgoing   = visibleDocuments.filter(d => getDocumentDirection(d) === "Outgoing").length;
   const inProcess       = visibleDocuments.filter(d => d.status === "In Process").length;
   const completed       = visibleDocuments.filter(d => d.status === "Completed").length;
