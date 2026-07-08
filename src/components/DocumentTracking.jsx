@@ -26,6 +26,10 @@ function getTrackingNumberPrefix() {
   return `CBMSD-${month}${year}-`;
 }
 
+function getDocumentDirection(doc) {
+  return doc?.dateReleased ? "Outgoing" : "Incoming";
+}
+
 const EMPTY_FORM = {
   trackingNumber: getTrackingNumberPrefix(), title: "", category: "Letter", subject: "",
   dateReceived: new Date().toISOString().split("T")[0], dateReleased: "",
@@ -102,7 +106,7 @@ export default function DocumentTracking() {
   }, []);
 
   const totalIncoming   = visibleDocuments.length;
-  const totalOutgoing   = visibleDocuments.filter(d => d.dateReleased).length;
+  const totalOutgoing   = visibleDocuments.filter(d => getDocumentDirection(d) === "Outgoing").length;
   const inProcess       = visibleDocuments.filter(d => d.status === "In Process").length;
   const completed       = visibleDocuments.filter(d => d.status === "Completed").length;
   const recent          = [...visibleDocuments].sort((a, b) => (b.dateReceived > a.dateReceived ? 1 : -1)).slice(0, 3);
@@ -285,7 +289,6 @@ export default function DocumentTracking() {
                   { key: "title", label: "Document Title *", type: "text" },
                   { key: "subject", label: "Subject", type: "text" },
                   { key: "dateReceived", label: "Date Received", type: "date" },
-                  { key: "dateReleased", label: "Date Released", type: "date" },
                   { key: "originatingOffice", label: "Originating Office *", type: "text" },
                   { key: "destinationOffice", label: "Destination Office", type: "text" },
                   { key: "currentOffice", label: "Current Office *", type: "text" },
@@ -301,6 +304,33 @@ export default function DocumentTracking() {
                     {errors[key] && <p className="text-xs text-status-red mt-0.5">{errors[key]}</p>}
                   </div>
                 ))}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Direction</label>
+                  <select
+                    value={form.dateReleased ? "Outgoing" : "Incoming"}
+                    onChange={(e) => {
+                      const nextDirection = e.target.value;
+                      const today = new Date().toISOString().split("T")[0];
+                      setForm(f => ({
+                        ...f,
+                        dateReleased: nextDirection === "Outgoing" ? (f.dateReleased || today) : "",
+                      }));
+                    }}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 outline-none focus:border-teal-400 bg-white"
+                  >
+                    <option value="Incoming">Incoming</option>
+                    <option value="Outgoing">Outgoing</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Date Released</label>
+                  <input
+                    type="date"
+                    value={form.dateReleased}
+                    onChange={e => setForm(f => ({ ...f, dateReleased: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 outline-none focus:border-teal-400 bg-white"
+                  />
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Assigned Personnel</label>
                   <select value={form.assignedPersonnel} onChange={e => setForm(f => ({ ...f, assignedPersonnel: e.target.value }))}
@@ -335,6 +365,9 @@ export default function DocumentTracking() {
                   />
                 </div>
               </div>
+              <p className="text-xs text-slate-500 mt-3">
+                Incoming documents have no release date. Outgoing documents are marked when a release date is added.
+              </p>
               {saveErr && <p className="text-sm text-status-red mt-2">{saveErr}</p>}
               <div className="flex gap-2 justify-end mt-4">
                 <button onClick={() => setShowForm(false)} disabled={saving} className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
@@ -413,6 +446,7 @@ export default function DocumentTracking() {
                     <th className="py-3 px-4 font-medium">Title / Category</th>
                     <th className="py-3 px-4 font-medium">Current Office</th>
                     <th className="py-3 px-4 font-medium">Date Received</th>
+                    <th className="py-3 px-4 font-medium">Direction</th>
                     <th className="py-3 px-4 font-medium">Status</th>
                     <th className="py-3 px-4 font-medium">Remarks</th>
                     <th className="py-3 px-4 font-medium text-right">Actions</th>
@@ -433,6 +467,16 @@ export default function DocumentTracking() {
                         <p className="text-xs text-slate-500">Assigned: {doc.assignedPersonnel || "—"}</p>
                       </td>
                       <td className="py-3 px-4 text-sm text-slate-600">{doc.dateReceived}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-col gap-1">
+                          <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${getDocumentDirection(doc) === "Outgoing" ? "bg-teal-50 text-teal-700" : "bg-navy-50 text-navy-700"}`}>
+                            {getDocumentDirection(doc)}
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            {getDocumentDirection(doc) === "Outgoing" ? `Released ${doc.dateReleased || "—"}` : "Awaiting release"}
+                          </span>
+                        </div>
+                      </td>
                       <td className="py-3 px-4">
                         <select
                           value={doc.status}
@@ -501,7 +545,7 @@ export default function DocumentTracking() {
                   ))}
                   {paged.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-10 text-center text-slate-400 text-sm">
+                      <td colSpan={8} className="py-10 text-center text-slate-400 text-sm">
                         No documents found.
                       </td>
                     </tr>
