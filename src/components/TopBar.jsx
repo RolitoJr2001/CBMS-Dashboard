@@ -25,8 +25,31 @@ function formatNotificationTime(value) {
   }).format(date);
 }
 
+function formatRelativeTime(value) {
+  if (!value) return "Just now";
+
+  const diffMs = Date.now() - new Date(value).getTime();
+  const diffMins = Math.round(diffMs / 60000);
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+
+  const diffHours = Math.round(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.round(diffHours / 24);
+  return `${diffDays}d ago`;
+}
+
 export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
-  const { upcomingEvents, documents, notifications, user } = useApp();
+  const {
+    upcomingEvents,
+    documents,
+    notifications,
+    user,
+    markNotificationRead,
+    markAllNotificationsRead,
+    deleteNotification,
+  } = useApp();
   const isAdmin = user?.role === "admin";
   const currentRole = isAdmin ? "admin" : "viewer";
   const [notifOpen, setNotifOpen] = useState(false);
@@ -40,28 +63,8 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
   useEffect(() => {
     if (!user) {
       setDismissedIds([]);
-      return;
-    }
-
-    const storageKey = `cbms-dismissed-notifications:${user.id || "guest"}`;
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      setDismissedIds(raw ? JSON.parse(raw) : []);
-    } catch {
-      setDismissedIds([]);
     }
   }, [user?.id]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const storageKey = `cbms-dismissed-notifications:${user.id || "guest"}`;
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(dismissedIds));
-    } catch {
-      // ignore storage errors
-    }
-  }, [user?.id, dismissedIds]);
 
   const urgentEvents = upcomingEvents
     .filter(e => {
@@ -83,6 +86,11 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
         time: item.createdAt ? formatNotificationTime(item.createdAt) : null,
         badge: item.section,
         accent: "text-teal-700",
+        read: Boolean(item.read),
+        category: item.type || "activity",
+        relativeTime: formatRelativeTime(item.createdAt),
+        actorRole: item.actorRole || "system",
+        raw: item,
       })),
     ...urgentEvents.map(ev => ({
       id: `event-${ev.id}`,
@@ -102,6 +110,7 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
     })),
   ];
   const visibleNotifItems = notifItems.filter(item => !dismissedIds.includes(item.id));
+  const unreadCount = visibleNotifItems.filter(item => !item.read).length;
   const notifCount = visibleNotifItems.length;
 
   function dismissItem(id) {
@@ -152,9 +161,9 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
             aria-label="Notifications"
           >
             <MdNotifications className="text-lg" />
-            {notifCount > 0 && (
+            {unreadCount > 0 && (
               <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-status-red text-white text-[9px] font-bold flex items-center justify-center badge-pulse">
-                {notifCount}
+                {unreadCount}
               </span>
             )}
           </button>
@@ -163,24 +172,46 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
             <>
               <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
               <div className="absolute right-0 top-11 z-50 w-80 bg-white rounded-xl border border-slate-100 shadow-cardHover overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-100">
+                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-navy-900">Notifications</p>
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      className="text-xs text-teal-700 font-medium"
+                      onClick={() => markAllNotificationsRead()}
+                    >
+                      Mark all read
+                    </button>
+                  )}
                 </div>
                 <div className="divide-y divide-slate-50 max-h-72 overflow-y-auto">
                   {visibleNotifItems.map(item => (
-                    <div key={item.id} className="px-4 py-3 hover:bg-slate-50 transition-colors flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
+                    <div
+                      key={item.id}
+                      className={`px-4 py-3 hover:bg-slate-50 transition-colors flex items-start justify-between gap-2 ${item.read ? "bg-white" : "bg-teal-50/60"}`}
+                    >
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => markNotificationRead(item.id)}
+                      >
                         <p className={`text-xs font-semibold mb-0.5 ${item.accent}`}>{item.badge}</p>
                         <p className="text-sm text-navy-900">{item.title}</p>
                         {item.actor && <p className="text-[11px] text-slate-500 mt-1">{item.actor}</p>}
                         <p className="text-xs text-slate-400 mt-1">{item.message}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5">{item.category}</span>
+                          {item.actorRole && <span className="rounded-full bg-slate-100 px-2 py-0.5 capitalize">{item.actorRole}</span>}
+                          {item.relativeTime && <span>{item.relativeTime}</span>}
+                        </div>
                         {item.subject && <p className="text-[11px] text-slate-400 mt-1">Affected: {item.subject}</p>}
                         {item.time && <p className="text-[11px] text-slate-400 mt-1">{item.time}</p>}
-                      </div>
+                      </button>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          deleteNotification(item.id);
                           dismissItem(item.id);
                         }}
                         className="text-slate-400 hover:text-slate-600 transition-colors"

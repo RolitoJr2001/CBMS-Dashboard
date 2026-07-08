@@ -6,6 +6,8 @@ import {
   getSession,
   getProfile,
   onAuthChange,
+  fetchProfiles,
+  getEffectiveProfile,
 } from "../services/authService";
 import {
   fetchEvents,
@@ -33,6 +35,20 @@ import {
   removeTask,
 } from "../services/tasksService";
 import { supabase } from "../lib/supabase";
+import {
+  fetchNotifications,
+  createNotificationForRecipients,
+  createNotificationsForAdmins,
+  createNotificationForUser,
+  notifyAdmins,
+  notifyUser,
+  buildNotification,
+  markNotificationRead,
+  markAllNotificationsRead,
+  deleteNotification,
+  deleteAllReadNotifications,
+  subscribeToNotifications,
+} from "../services/notificationService";
 
 const AppContext = createContext(null);
 
@@ -68,35 +84,8 @@ export function AppProvider({ children }) {
 
   const userRef = useRef(user);
   const suppressRealtimeNotificationRef = useRef(false);
+  const realtimeNotificationIdsRef = useRef(new Set());
   useEffect(() => { userRef.current = user; }, [user]);
-
-  const getNotificationStorageKey = useCallback((profile) => {
-    const userId = profile?.id || profile?.user?.id;
-    return userId ? `cbms-notifications:${userId}` : "cbms-notifications:guest";
-  }, []);
-
-  const readStoredNotifications = useCallback((profile) => {
-    if (typeof window === "undefined") return [];
-    try {
-      const key = getNotificationStorageKey(profile);
-      const raw = window.localStorage.getItem(key);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }, [getNotificationStorageKey]);
-
-  const writeStoredNotifications = useCallback((profile, items) => {
-    if (typeof window === "undefined") return;
-    try {
-      const key = getNotificationStorageKey(profile);
-      window.localStorage.setItem(key, JSON.stringify(items));
-    } catch {
-      // ignore storage errors
-    }
-  }, [getNotificationStorageKey]);
 
   const embedUrl = calendarEmbedUrl;
 
@@ -107,12 +96,93 @@ export function AppProvider({ children }) {
     }, 500);
   }, []);
 
+  const normalizeAssignmentValues = useCallback((value) => {
+    if (Array.isArray(value)) {
+      return value.filter(Boolean).map(item => String(item).trim()).filter(Boolean);
+    }
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return [];
+
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(Boolean).map(item => String(item).trim()).filter(Boolean);
+        }
+      } catch {
+        return [trimmed];
+      }
+
+      return [trimmed];
+    }
+
+    return [];
+  }, []);
+
+  const isSameAssignmentSet = useCallback((left = [], right = []) => {
+    const leftValues = normalizeAssignmentValues(left)
+      .map(item => String(item).trim().toLowerCase())
+      .sort();
+    const rightValues = normalizeAssignmentValues(right)
+      .map(item => String(item).trim().toLowerCase())
+      .sort();
+
+    return leftValues.length === rightValues.length && leftValues.every((item, index) => item === rightValues[index]);
+  }, [normalizeAssignmentValues]);
+
+  const addNotificationsToState = useCallback((created = []) => {
+    const normalized = (created || []).filter(Boolean);
+    if (!normalized.length) return;
+
+    normalized.forEach((item) => {
+      if (item?.id) realtimeNotificationIdsRef.current.add(item.id);
+    });
+
+    setNotifications(prev => [
+      ...normalized,
+      ...prev.filter(item => !normalized.some(candidate => candidate.id === item.id)),
+    ].slice(0, 100));
+  }, []);
+
+  const getActorDisplayName = useCallback((actor = userRef.current) => {
+    return actor?.name || actor?.full_name || actor?.fullName || actor?.username || actor?.email || "Someone";
+  }, []);
+
+  const notifyAssignmentToRecipients = useCallback(async (value, payload = {}) => {
+    if (!userRef.current?.id) return [];
+
+    const profiles = await fetchProfiles();
+    const normalizedTargets = normalizeAssignmentValues(value)
+      .map(item => String(item).trim().toLowerCase())
+      .filter(Boolean);
+
+    if (!normalizedTargets.length) return [];
+
+    const recipientIds = [...new Set((profiles || [])
+      .map(profile => {
+        const profileValues = [profile?.username, profile?.name, profile?.full_name, profile?.fullName]
+          .filter(Boolean)
+          .map(item => String(item).trim().toLowerCase());
+
+        return profileValues.some(candidate => normalizedTargets.includes(candidate)) ? profile?.id : null;
+      })
+      .filter(Boolean))];
+
+    if (!recipientIds.length) return [];
+
+    return notify({
+      recipients: recipientIds,
+      ...payload,
+    });
+  }, [normalizeAssignmentValues]);
+
   // ── Initialise: resolve session on mount ─────────────────
   useEffect(() => {
     getSession().then(async (session) => {
       if (session?.user) {
         try {
-          const profile = await getProfile(session.user.id);
+          const profile = await getEffectiveProfile(session.user.id, session.user);
           setUser({ ...session.user, ...profile });
         } catch {
           setUser(session.user);
@@ -125,7 +195,7 @@ export function AppProvider({ children }) {
     const sub = onAuthChange(async (session) => {
       if (session?.user) {
         try {
-          const profile = await getProfile(session.user.id);
+          const profile = await getEffectiveProfile(session.user.id, session.user);
           setUser({ ...session.user, ...profile });
         } catch {
           setUser(session.user);
@@ -141,23 +211,31 @@ export function AppProvider({ children }) {
     return () => sub?.unsubscribe();
   }, []);
 
+  // ── Load notifications once user is set ───────────────────
+  useEffect(() => {
+    if (!user?.id) return;
+
+    async function loadNotifications() {
+      try {
+        const data = await fetchNotifications(user.id);
+        setNotifications(data);
+        (data || []).forEach((item) => {
+          if (item?.id) realtimeNotificationIdsRef.current.add(item.id);
+        });
+      } catch (error) {
+        console.error("Failed loading notifications", error);
+      }
+    }
+
+    loadNotifications();
+  }, [user?.id]);
+
+
   // ── Load data once user is set ────────────────────────────
   useEffect(() => {
     if (!user) return;
     loadAll();
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!user) return;
-
-    const stored = readStoredNotifications(user);
-    setNotifications(stored);
-  }, [user?.id, readStoredNotifications, getNotificationStorageKey]);
-
-  useEffect(() => {
-    if (!user) return;
-    writeStoredNotifications(user, notifications);
-  }, [user?.id, notifications, writeStoredNotifications]);
 
   useEffect(() => {
     if (!user) return undefined;
@@ -176,76 +254,34 @@ export function AppProvider({ children }) {
           const mappedTask = payload.new ? fromDbTask(payload.new) : null;
           if (payload.eventType === "INSERT") {
             setTasks(prev => [mappedTask, ...prev.filter(item => item.id !== mappedTask.id)]);
-            pushNotification({
-              title: "Task updated",
-              message: payload.new?.title || "A task was updated.",
-              section: "Tasks",
-              type: "task",
-            });
           } else if (payload.eventType === "UPDATE") {
             setTasks(prev => prev.map(item => item.id === payload.new.id ? mappedTask : item));
-            pushNotification({
-              title: "Task updated",
-              message: payload.new?.title || "A task was updated.",
-              section: "Tasks",
-              type: "task",
-            });
           } else if (payload.eventType === "DELETE") {
             setTasks(prev => prev.filter(item => item.id !== payload.old.id));
-            pushNotification({
-              title: "Task removed",
-              message: payload.old?.title || "A task was removed.",
-              section: "Tasks",
-              type: "task",
-            });
           }
         }
       )
       .subscribe();
 
-    const documentsChannel = supabase
-      .channel("documents-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "documents" },
-        (payload) => {
-          if (suppressRealtimeNotificationRef.current) {
-            suppressRealtimeNotificationRef.current = false;
-            return;
-          }
-
-          if (payload.eventType === "INSERT") {
-            loadDocuments();
-            pushNotification({
-              title: "Document added",
-              message: payload.new?.title || "A document was added.",
-              section: "Document Tracking",
-              type: "document",
-            });
-          } else if (payload.eventType === "UPDATE") {
-            loadDocuments();
-            pushNotification({
-              title: "Document updated",
-              message: payload.new?.title || "A document was updated.",
-              section: "Document Tracking",
-              type: "document",
-            });
-          } else if (payload.eventType === "DELETE") {
-            loadDocuments();
-            pushNotification({
-              title: "Document removed",
-              message: payload.old?.title || "A document was removed.",
-              section: "Document Tracking",
-              type: "document",
-            });
-          }
+    const notificationsChannel = subscribeToNotifications(user.id, (event, payload) => {
+      if (event === "insert") {
+        const id = payload?.id;
+        if (!id || realtimeNotificationIdsRef.current.has(id)) {
+          if (id) realtimeNotificationIdsRef.current.delete(id);
+          return;
         }
-      )
-      .subscribe();
+        realtimeNotificationIdsRef.current.add(id);
+        setNotifications(prev => [payload, ...prev.filter(n => n.id !== payload.id)]);
+      } else if (event === "update") {
+        setNotifications(prev => prev.map(item => item.id === payload.id ? payload : item));
+      } else if (event === "delete") {
+        setNotifications(prev => prev.filter(item => item.id !== payload.id));
+      }
+    });
 
     return () => {
       supabase.removeChannel(tasksChannel);
-      supabase.removeChannel(documentsChannel);
+      supabase.removeChannel(notificationsChannel);
     };
   }, [user?.id]);
 
@@ -310,7 +346,7 @@ export function AppProvider({ children }) {
   // through real Supabase Auth, returning a normal Supabase session.
   const login = useCallback(async (username, password) => {
     const { session } = await authSignIn(username, password);
-    const profile = await getProfile(session.user.id);
+    const profile = await getEffectiveProfile(session.user.id, session.user);
     setUser({ ...session.user, ...profile });
   }, []);
 
@@ -321,101 +357,274 @@ export function AppProvider({ children }) {
     setRequirements([]);
     setDocuments([]);
     setTasks([]);
+    setNotifications([]);
   }, []);
 
-  const formatNotificationTime = useCallback((value) => {
-    const date = value ? new Date(value) : new Date();
-    return new Intl.DateTimeFormat("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    }).format(date);
+  const handleMarkNotificationRead = useCallback(async (id) => {
+    if (!userRef.current?.id) return;
+    try {
+      await markNotificationRead(id, userRef.current.id);
+      setNotifications(prev => prev.map(item => item.id === id ? { ...item, read: true } : item));
+    } catch (error) {
+      console.error("Failed marking notification as read", error);
+    }
   }, []);
 
-  const getDisplayName = useCallback((profile) => {
-    return profile?.full_name || profile?.fullName || profile?.name || profile?.username || "System";
+  const handleMarkAllNotificationsRead = useCallback(async () => {
+    if (!userRef.current?.id) return;
+    try {
+      await markAllNotificationsRead(userRef.current.id);
+      setNotifications(prev => prev.map(item => ({ ...item, read: true })));
+    } catch (error) {
+      console.error("Failed marking notifications as read", error);
+    }
   }, []);
 
-  const getRoleLabel = useCallback((profile) => {
-    return String(profile?.role || "viewer").toLowerCase() === "admin" ? "admin" : "viewer";
+  const handleDeleteNotification = useCallback(async (id) => {
+    if (!userRef.current?.id) return;
+    try {
+      await deleteNotification(id, userRef.current.id);
+      setNotifications(prev => prev.filter(item => item.id !== id));
+    } catch (error) {
+      console.error("Failed deleting notification", error);
+    }
   }, []);
 
-  const pushNotification = useCallback((notification) => {
-    const entry = {
-      id: `${Date.now()}-${Math.random()}`,
-      createdAt: new Date().toISOString(),
-      recipientRole: "all",
-      ...notification,
-    };
-
-    setNotifications(prev => [entry, ...prev]
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 20));
+  const handleDeleteAllReadNotifications = useCallback(async () => {
+    if (!userRef.current?.id) return;
+    try {
+      await deleteAllReadNotifications(userRef.current.id);
+      setNotifications(prev => prev.filter(item => !item.read));
+    } catch (error) {
+      console.error("Failed deleting read notifications", error);
+    }
   }, []);
 
-  const notifyActivity = useCallback((payload) => {
-    const actor = payload.actor || userRef.current;
-    const actorName = getDisplayName(actor);
-    const actorRole = getRoleLabel(actor);
-    const subjectTypeLabel = payload.subjectType === "task" ? "Task" : "Document";
-    const actionLabel = payload.action || "updated";
-    const subjectLabel = payload.subjectName ? `“${payload.subjectName}”` : subjectTypeLabel;
-    const recipients = payload.recipients || [actorRole === "admin" ? "viewer" : "admin", actorRole];
-    const uniqueRecipients = [...new Set(recipients.filter(Boolean))];
+  const notify = useCallback(async (options = {}) => {
+    const actor = userRef.current;
+    if (!actor?.id) return [];
 
-    const baseNotification = {
-      title: `${subjectTypeLabel} ${actionLabel}`,
-      message: `${actorName} (${actorRole}) ${actionLabel} ${subjectTypeLabel.toLowerCase()} ${subjectLabel}`.trim(),
-      section: payload.section,
-      type: payload.type,
+    const {
+      actorId = actor.id,
+      recipients = "admins",
+      title,
+      message,
+      section = "General",
+      type = "activity",
+      entityId = null,
+      entityType = null,
+      metadata = {},
+      action = "system_message",
+      actorName = getActorDisplayName(actor),
+      actorRole = actor?.role || "viewer",
+    } = options;
+
+    const template = buildNotification({
+      action,
       actorName,
       actorRole,
-      action: actionLabel,
-      subjectType: payload.subjectType,
-      subjectName: payload.subjectName,
-      createdAt: new Date().toISOString(),
-    };
-
-    uniqueRecipients.forEach((recipientRole) => {
-      pushNotification({ ...baseNotification, recipientRole });
+      title,
+      message,
+      section,
+      type,
+      entityId,
+      entityType,
+      metadata,
     });
-  }, [getDisplayName, getRoleLabel, pushNotification]);
+
+    try {
+      let created = [];
+      if (recipients === "admins") {
+        created = await notifyAdmins({
+          actorId,
+          actorName: template.actorName,
+          actorRole: template.actorRole,
+          title: template.title,
+          message: template.message,
+          section: template.section,
+          type: template.type,
+          entityId: template.entityId,
+          entityType: template.entityType,
+          action: template.action,
+          metadata: template.metadata,
+        }, actorId);
+      } else if (recipients === "user") {
+        created = [await notifyUser({
+          actorId,
+          actorName: template.actorName,
+          actorRole: template.actorRole,
+          title: template.title,
+          message: template.message,
+          section: template.section,
+          type: template.type,
+          entityId: template.entityId,
+          entityType: template.entityType,
+          action: template.action,
+          metadata: template.metadata,
+        }, actorId)];
+      } else if (Array.isArray(recipients)) {
+        created = await createNotificationForRecipients({
+          actorId,
+          actorName: template.actorName,
+          actorRole: template.actorRole,
+          title: template.title,
+          message: template.message,
+          section: template.section,
+          type: template.type,
+          entityId: template.entityId,
+          entityType: template.entityType,
+          action: template.action,
+          metadata: template.metadata,
+        }, recipients);
+      } else if (recipients) {
+        created = [await notifyUser({
+          actorId,
+          actorName: template.actorName,
+          actorRole: template.actorRole,
+          title: template.title,
+          message: template.message,
+          section: template.section,
+          type: template.type,
+          entityId: template.entityId,
+          entityType: template.entityType,
+          action: template.action,
+          metadata: template.metadata,
+        }, recipients)];
+      }
+
+      if (created.length) {
+        addNotificationsToState(created);
+      }
+
+      return created;
+    } catch (error) {
+      console.error("Failed creating notification", error);
+      return [];
+    }
+  }, [addNotificationsToState]);
+
+  const pushNotification = useCallback(async (notification) => {
+    if (!userRef.current?.id) return [];
+
+    const actorId = userRef.current.id;
+    const role = String(userRef.current?.role || "viewer").toLowerCase();
+    const isAdmin = role === "admin";
+    const recipients = notification.recipients || "admins";
+
+    const results = [];
+
+    if (!isAdmin) {
+      results.push(await notify({
+        actorId,
+        recipients: "admins",
+        title: notification.title,
+        message: notification.message,
+        section: notification.section,
+        type: notification.type,
+        entityId: notification.entityId,
+        entityType: notification.entityType,
+        action: notification.action,
+        metadata: notification.metadata || {},
+      }));
+
+      if (notification.confirmToActor !== false) {
+        results.push(await notify({
+          actorId,
+          recipients: "user",
+          title: notification.confirmTitle || "Your update was recorded",
+          message: notification.confirmMessage || notification.message,
+          section: notification.section,
+          type: notification.type,
+          entityId: notification.entityId,
+          entityType: notification.entityType,
+          action: notification.action,
+          metadata: notification.metadata || {},
+        }));
+      }
+    } else {
+      results.push(await notify({
+        actorId,
+        recipients,
+        title: notification.title,
+        message: notification.message,
+        section: notification.section,
+        type: notification.type,
+        entityId: notification.entityId,
+        entityType: notification.entityType,
+        action: notification.action,
+        metadata: notification.metadata || {},
+      }));
+    }
+
+    return results.flat().filter(Boolean);
+  }, [notify]);
 
   // ── Calendar Events ───────────────────────────────────────
   const addEvent = useCallback(async (ev) => {
     const created = await insertEvent(ev, userRef.current?.id);
     setEvents(prev => [...prev, created].sort((a, b) => a.date > b.date ? 1 : -1));
+
+    if (userRef.current?.role === "admin") {
+      await notifyAssignmentToRecipients(ev.assignedPersonnel, {
+        action: "schedule_assigned",
+        section: "Schedule & Events",
+        type: "assignment",
+        entityId: created?.id,
+        entityType: "event",
+        metadata: { itemTitle: ev.title || "Schedule", entityName: ev.title || "Schedule" },
+      });
+    }
+
     pushNotification({
-      title: "New schedule added",
-      message: ev.title || "A new schedule was added.",
+      action: "schedule_created",
       section: "Schedule & Events",
       type: "event",
+      entityId: created?.id,
+      entityType: "event",
+      metadata: { itemTitle: ev.title || "Schedule", entityName: ev.title || "Schedule" },
     });
     return created;
-  }, [pushNotification]);
+  }, [getActorDisplayName, notifyAssignmentToRecipients, pushNotification]);
 
   const updateEvent = useCallback(async (id, changes) => {
+    const previousEvent = events.find(event => event.id === id);
     const updated = await patchEvent(id, changes);
     setEvents(prev => prev.map(e => e.id === id ? updated : e));
+
+    const actorIsAdmin = String(userRef.current?.role || "viewer").toLowerCase() === "admin";
+    const assignmentChanged = actorIsAdmin && changes.assignedPersonnel !== undefined && !isSameAssignmentSet(previousEvent?.assignedPersonnel || [], changes.assignedPersonnel);
+    if (assignmentChanged) {
+      await notifyAssignmentToRecipients(changes.assignedPersonnel, {
+        action: "schedule_assigned",
+        section: "Schedule & Events",
+        type: "assignment",
+        entityId: updated?.id,
+        entityType: "event",
+        metadata: { itemTitle: updated?.title || previousEvent?.title || "Schedule", entityName: updated?.title || previousEvent?.title || "Schedule" },
+      });
+    }
+
     pushNotification({
-      title: "Schedule updated",
-      message: changes.title || "A schedule was updated.",
+      action: "schedule_updated",
       section: "Schedule & Events",
       type: "event",
+      entityId: updated?.id,
+      entityType: "event",
+      metadata: { itemTitle: updated?.title || previousEvent?.title || "Schedule", entityName: updated?.title || previousEvent?.title || "Schedule" },
     });
     return updated;
-  }, [pushNotification]);
+  }, [events, getActorDisplayName, isSameAssignmentSet, notifyAssignmentToRecipients, pushNotification]);
 
   const deleteEvent = useCallback(async (id) => {
     await removeEvent(id);
     setEvents(prev => prev.filter(e => e.id !== id));
     pushNotification({
-      title: "Schedule removed",
-      message: "A schedule was removed.",
+      action: "schedule_deleted",
       section: "Schedule & Events",
       type: "event",
+      entityId: id,
+      entityType: "event",
+      metadata: { itemTitle: "Schedule" },
     });
   }, [pushNotification]);
 
@@ -427,35 +636,68 @@ export function AppProvider({ children }) {
   const addRequirement = useCallback(async (req) => {
     const created = await insertRequirement(req, userRef.current?.id);
     setRequirements(prev => [...prev, created]);
+
+    if (userRef.current?.role === "admin") {
+      await notifyAssignmentToRecipients(req.assignedTo, {
+        action: "requirement_assigned",
+        section: "Requirements",
+        type: "assignment",
+        entityType: "requirement",
+        entityId: created?.id,
+        metadata: { itemTitle: req.requirement || "Requirement", entityName: req.requirement || "Requirement" },
+      });
+    }
+
     pushNotification({
-      title: "Requirement added",
-      message: req.title || "A requirement was added.",
+      action: "requirement_created",
       section: "Requirements",
       type: "requirement",
+      entityType: "requirement",
+      entityId: created?.id,
+      metadata: { itemTitle: req.requirement || "Requirement", entityName: req.requirement || "Requirement" },
     });
     return created;
-  }, [pushNotification]);
+  }, [getActorDisplayName, notifyAssignmentToRecipients, pushNotification]);
 
   const updateRequirement = useCallback(async (id, changes) => {
+    const previousRequirement = requirements.find(requirement => requirement.id === id);
     const updated = await patchRequirement(id, changes);
     setRequirements(prev => prev.map(r => r.id === id ? updated : r));
+
+    const actorIsAdmin = String(userRef.current?.role || "viewer").toLowerCase() === "admin";
+    const assignmentChanged = actorIsAdmin && changes.assignedTo !== undefined && !isSameAssignmentSet(previousRequirement?.assignedTo || [], changes.assignedTo);
+    if (assignmentChanged) {
+      await notifyAssignmentToRecipients(changes.assignedTo, {
+        action: "requirement_assigned",
+        section: "Requirements",
+        type: "assignment",
+        entityType: "requirement",
+        entityId: updated?.id,
+        metadata: { itemTitle: updated?.requirement || previousRequirement?.requirement || "Requirement", entityName: updated?.requirement || previousRequirement?.requirement || "Requirement" },
+      });
+    }
+
     pushNotification({
-      title: "Requirement updated",
-      message: changes.title || "A requirement was updated.",
+      action: "requirement_updated",
       section: "Requirements",
       type: "requirement",
+      entityType: "requirement",
+      entityId: updated?.id,
+      metadata: { itemTitle: updated?.requirement || previousRequirement?.requirement || "Requirement", entityName: updated?.requirement || previousRequirement?.requirement || "Requirement" },
     });
     return updated;
-  }, [pushNotification]);
+  }, [getActorDisplayName, isSameAssignmentSet, notifyAssignmentToRecipients, pushNotification, requirements]);
 
   const deleteRequirement = useCallback(async (id) => {
     await removeRequirement(id);
     setRequirements(prev => prev.filter(r => r.id !== id));
     pushNotification({
-      title: "Requirement removed",
-      message: "A requirement was removed.",
+      action: "requirement_deleted",
       section: "Requirements",
       type: "requirement",
+      entityType: "requirement",
+      entityId: id,
+      metadata: { itemTitle: "Requirement" },
     });
   }, [pushNotification]);
 
@@ -464,50 +706,78 @@ export function AppProvider({ children }) {
     suppressNextRealtimeNotification();
     const id = await insertDocument(doc, userRef.current?.id);
     await loadDocuments(); // reload to get full history
-    notifyActivity({
-      action: "created",
-      subjectType: "document",
-      subjectName: doc.title || "Untitled document",
+
+    if (userRef.current?.role === "admin") {
+      await notifyAssignmentToRecipients(doc.assignedPersonnel, {
+        action: "document_assigned",
+        section: "Document Tracking",
+        type: "assignment",
+        entityType: "document",
+        entityId: id,
+        metadata: { itemTitle: doc.title || "Document", entityName: doc.title || "Document" },
+      });
+    }
+
+    pushNotification({
+      action: "document_uploaded",
       section: "Document Tracking",
       type: "document",
+      entityType: "document",
+      entityId: id,
+      metadata: { itemTitle: doc.title || "Document", entityName: doc.title || "Document", trackingNumber: doc.trackingNumber || null },
     });
     return id;
-  }, [notifyActivity]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [getActorDisplayName, notifyAssignmentToRecipients, pushNotification]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateDocument = useCallback(async (id, changes) => {
     suppressNextRealtimeNotification();
+    const previousDocument = documents.find(document => document.id === id);
     const updated = await patchDocument(id, changes, userRef.current?.id);
     setDocuments(prev => prev.map(d => d.id === id ? updated : d));
     await loadDocuments();
 
-    const action = changes?.status
-      ? (changes.status === "Completed" || changes.status === "Released" ? "submitted" : "changed status")
-      : changes?.remarks !== undefined
-        ? "updated remarks"
-        : "updated";
+    const actorIsAdmin = String(userRef.current?.role || "viewer").toLowerCase() === "admin";
+    const assignmentChanged = actorIsAdmin && changes.assignedPersonnel !== undefined && !isSameAssignmentSet(previousDocument?.assignedPersonnel || [], changes.assignedPersonnel);
+    if (assignmentChanged) {
+      await notifyAssignmentToRecipients(changes.assignedPersonnel, {
+        action: "document_assigned",
+        section: "Document Tracking",
+        type: "assignment",
+        entityType: "document",
+        entityId: updated?.id,
+        metadata: { itemTitle: updated?.title || previousDocument?.title || "Document", entityName: updated?.title || previousDocument?.title || "Document" },
+      });
+    }
 
-    notifyActivity({
-      action,
-      subjectType: "document",
-      subjectName: updated?.title || changes?.title || "Untitled document",
+    const isTrackingUpdate = changes.trackingNumber !== undefined || changes.currentOffice !== undefined || changes.status !== undefined;
+    pushNotification({
+      action: isTrackingUpdate ? "document_tracking_updated" : "document_updated",
       section: "Document Tracking",
       type: "document",
+      entityType: "document",
+      entityId: updated?.id,
+      metadata: {
+        itemTitle: updated?.title || previousDocument?.title || "Document",
+        entityName: updated?.title || previousDocument?.title || "Document",
+        trackingNumber: updated?.trackingNumber || previousDocument?.trackingNumber || null,
+      },
     });
     return updated;
-  }, [loadDocuments, notifyActivity]);
+  }, [documents, getActorDisplayName, isSameAssignmentSet, loadDocuments, notifyAssignmentToRecipients, pushNotification]);
 
   const deleteDocument = useCallback(async (id) => {
     suppressNextRealtimeNotification();
     await removeDocument(id);
     setDocuments(prev => prev.filter(d => d.id !== id));
-    notifyActivity({
-      action: "deleted",
-      subjectType: "document",
-      subjectName: "A document",
+    pushNotification({
+      action: "document_deleted",
       section: "Document Tracking",
       type: "document",
+      entityType: "document",
+      entityId: id,
+      metadata: { itemTitle: "Document" },
     });
-  }, [notifyActivity]);
+  }, [pushNotification]);
 
   const isDuplicateTrackingNumber = useCallback(async (num, excludeId = null) => {
     return await checkDuplicateTracking(num, excludeId);
@@ -517,50 +787,111 @@ export function AppProvider({ children }) {
     suppressNextRealtimeNotification();
     const created = await insertTask(task, userRef.current?.id, userRef.current?.username || userRef.current?.name || "admin");
     setTasks(prev => [created, ...prev]);
-    notifyActivity({
-      action: "created",
-      subjectType: "task",
-      subjectName: task.title || "Untitled task",
+
+    if (userRef.current?.role === "admin") {
+      await notifyAssignmentToRecipients(task.assignedTo, {
+        action: "task_assigned",
+        section: "Tasks",
+        type: "assignment",
+        entityType: "task",
+        entityId: created?.id,
+        metadata: { itemTitle: task.title || "Task", entityName: task.title || "Task", dueDate: task.dueDate || null },
+      });
+    }
+
+    pushNotification({
+      action: "task_created",
       section: "Tasks",
       type: "task",
+      entityType: "task",
+      entityId: created?.id,
+      metadata: { itemTitle: task.title || "Task", entityName: task.title || "Task", dueDate: task.dueDate || null },
     });
     return created;
-  }, [notifyActivity]);
+  }, [getActorDisplayName, notifyAssignmentToRecipients, pushNotification]);
 
   const updateTask = useCallback(async (id, changes) => {
     suppressNextRealtimeNotification();
+    const previousTask = tasks.find(task => task.id === id);
     const updated = await patchTask(id, changes);
     setTasks(prev => prev.map(t => t.id === id ? updated : t));
     await loadTasks();
 
-    const action = changes?.status
-      ? (changes.status === "Completed" ? "submitted" : "changed status")
-      : changes?.remarks !== undefined
-        ? "updated remarks"
-        : "updated";
+    const actorIsAdmin = String(userRef.current?.role || "viewer").toLowerCase() === "admin";
+    const assignedChanged = actorIsAdmin && changes.assignedTo !== undefined && !isSameAssignmentSet(previousTask?.assignedTo || [], changes.assignedTo);
+    if (assignedChanged) {
+      await notifyAssignmentToRecipients(changes.assignedTo, {
+        action: "task_assigned",
+        section: "Tasks",
+        type: "assignment",
+        entityType: "task",
+        entityId: updated?.id,
+        metadata: { itemTitle: updated?.title || previousTask?.title || "Task", entityName: updated?.title || previousTask?.title || "Task", dueDate: updated?.dueDate || previousTask?.dueDate || null },
+      });
+    }
 
-    notifyActivity({
-      action,
-      subjectType: "task",
-      subjectName: updated?.title || "Untitled task",
-      section: "Tasks",
-      type: "task",
-    });
+    const role = String(userRef.current?.role || "viewer").toLowerCase();
+    const isViewerAction = role !== "admin";
+    const statusChanged = changes.status !== undefined && changes.status !== previousTask?.status;
+    const remarksChanged = changes.remarks !== undefined && changes.remarks !== previousTask?.remarks;
+    const progressChanged = changes.progress !== undefined && changes.progress !== previousTask?.progress;
+    const completionChanged = changes.completion !== undefined && changes.completion !== previousTask?.completion;
+
+    if (isViewerAction && (statusChanged || remarksChanged || progressChanged || completionChanged)) {
+      const taskTitle = updated?.title || previousTask?.title || "this task";
+      const action = statusChanged ? "task_status_updated" : remarksChanged ? "task_remarks_updated" : "task_updated";
+
+      await pushNotification({
+        action,
+        section: "Tasks",
+        type: "task",
+        entityId: updated?.id,
+        entityType: "task",
+        metadata: {
+          itemTitle: taskTitle,
+          entityName: taskTitle,
+          oldStatus: previousTask?.status,
+          newStatus: updated?.status || changes.status,
+          remarks: changes.remarks,
+          dueDate: updated?.dueDate || previousTask?.dueDate || null,
+        },
+        confirmTitle: "You updated the task",
+        confirmMessage: `You updated ${taskTitle}.`,
+      });
+    }
+
+    if (!isViewerAction) {
+      pushNotification({
+        action: "task_updated",
+        section: "Tasks",
+        type: "task",
+        entityId: updated?.id,
+        entityType: "task",
+        metadata: {
+          itemTitle: updated?.title || previousTask?.title || "Task",
+          entityName: updated?.title || previousTask?.title || "Task",
+          oldStatus: previousTask?.status,
+          newStatus: updated?.status || changes.status,
+        },
+      });
+    }
+
     return updated;
-  }, [loadTasks, notifyActivity]);
+  }, [getActorDisplayName, isSameAssignmentSet, loadTasks, notifyAssignmentToRecipients, pushNotification, tasks]);
 
   const deleteTask = useCallback(async (id) => {
     suppressNextRealtimeNotification();
     await removeTask(id);
     setTasks(prev => prev.filter(t => t.id !== id));
-    notifyActivity({
-      action: "deleted",
-      subjectType: "task",
-      subjectName: "A task",
+    pushNotification({
+      action: "task_deleted",
       section: "Tasks",
       type: "task",
+      entityType: "task",
+      entityId: id,
+      metadata: { itemTitle: "Task" },
     });
-  }, [notifyActivity]);
+  }, [pushNotification]);
 
   return (
     <AppContext.Provider value={{
@@ -576,7 +907,11 @@ export function AppProvider({ children }) {
       // tasks
       tasks, addTask, updateTask, deleteTask,
       // notifications
-      notifications, pushNotification,
+      notifications, pushNotification, notify,
+      markNotificationRead: handleMarkNotificationRead,
+      markAllNotificationsRead: handleMarkAllNotificationsRead,
+      deleteNotification: handleDeleteNotification,
+      deleteAllReadNotifications: handleDeleteAllReadNotifications,
       // loading / error states
       loading, errors, reload: loadAll,
     }}>

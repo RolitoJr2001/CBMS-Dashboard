@@ -1,5 +1,24 @@
 import { supabase } from "../lib/supabase";
 
+const VALID_EVENT_TYPES = [
+  "Deadline",
+  "Meeting",
+  "Review",
+  "Briefing",
+  "Training/Workshop",
+  "Leave",
+  "Hearing",
+  "Seminar",
+  "Announcement",
+];
+
+function normalizeEventType(value) {
+  if (typeof value !== "string") return "Meeting";
+
+  const trimmed = value.trim();
+  return VALID_EVENT_TYPES.includes(trimmed) ? trimmed : "Meeting";
+}
+
 // ─── Map DB row → app shape ───────────────────────────────────
 function normalizeAssignedPersonnel(value) {
   if (Array.isArray(value)) {
@@ -36,7 +55,7 @@ function fromDb(row) {
     title:             row.title,
     date:              row.date,
     time:              row.time,
-    type:              row.type,
+    type:              normalizeEventType(row.type),
     description:       row.description || "",
     assignedPersonnel: normalizeAssignedPersonnel(row.assigned_personnel || row.assignedPersonnel),
   };
@@ -110,6 +129,7 @@ export async function insertEvent(ev, userId) {
   const payload = {
     ...ev,
     created_by: userId,
+    type: normalizeEventType(ev?.type),
   };
   delete payload.assignedPersonnel;
 
@@ -124,6 +144,9 @@ export async function insertEvent(ev, userId) {
 // ─── Update event ────────────────────────────────────────────
 export async function patchEvent(id, changes) {
   const payload = { ...changes };
+  if (Object.prototype.hasOwnProperty.call(payload, "type")) {
+    payload.type = normalizeEventType(payload.type);
+  }
   if (Object.prototype.hasOwnProperty.call(payload, "assignedPersonnel")) {
     payload.assigned_personnel = serializeAssignedPersonnel(payload.assignedPersonnel);
     delete payload.assignedPersonnel;

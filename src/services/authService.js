@@ -62,6 +62,29 @@ export async function getProfile(userId) {
   return data;
 }
 
+export async function getEffectiveProfile(userId, sessionUser = null) {
+  let profile = null;
+
+  try {
+    profile = await getProfile(userId);
+  } catch {
+    profile = null;
+  }
+
+  const explicitRole = sessionUser?.user_metadata?.role || sessionUser?.app_metadata?.role || profile?.role || "viewer";
+  const normalizedRole = String(explicitRole).trim().toLowerCase();
+
+  if (profile && normalizedRole && profile.role !== normalizedRole) {
+    try {
+      await updateProfile(userId, { role: normalizedRole });
+    } catch {
+      // Ignore update failures and continue using the resolved role.
+    }
+  }
+
+  return { ...(profile || {}), role: normalizedRole };
+}
+
 // ─── Update profile ──────────────────────────────────────────
 export async function updateProfile(userId, changes) {
   const { data, error } = await supabase

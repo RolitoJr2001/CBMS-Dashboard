@@ -5,6 +5,8 @@ import { useApp } from "../context/AppContext";
 import { sendPasswordReset } from "../services/authService";
 import cbmsLogo from "../../Logos/DASMO_OFFICIAL LOGO.png";
 
+const APP_VERSION = "v1.0.0";
+
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useApp();
@@ -139,6 +141,12 @@ export default function Login() {
             Contact your DASMO-CBMS administrator to create your account in the dashboard.
           </p>
         </div>
+      </div>
+      {/* Version - Bottom Right */}
+      <div className="fixed bottom-4 right-4 text-right select-none">
+        <p className="text-[11px] text-slate-300">
+          CBMS Dashboard {APP_VERSION}
+        </p>
       </div>
     </div>
   );
