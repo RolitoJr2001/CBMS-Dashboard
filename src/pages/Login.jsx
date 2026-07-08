@@ -5,7 +5,7 @@ import { useApp } from "../context/AppContext";
 import { sendPasswordReset } from "../services/authService";
 import cbmsLogo from "../../Logos/DASMO_OFFICIAL LOGO.png";
 
-const APP_VERSION = "v1.0.1";
+const APP_VERSION = "v1.0.2";
 
 export default function Login() {
   const navigate = useNavigate();
