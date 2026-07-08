@@ -5,7 +5,7 @@ import {
   FaSpinner, FaCheckCircle, FaExclamationCircle, FaListAlt,
 } from "react-icons/fa";
 import { useApp } from "../context/AppContext";
-import { fetchPersonnel } from "../services/personnelService";
+import { fetchProfiles } from "../services/authService";
 
 const STATUS_OPTIONS   = ["Received", "In Process", "Forwarded", "Released", "Completed", "Returned"];
 const CATEGORY_OPTIONS = ["Agreement", "Compliance", "Memorandum", "Letter", "Report", "Order", "Form", "Other"];
@@ -63,8 +63,17 @@ export default function DocumentTracking() {
 
   useEffect(() => {
     let mounted = true;
-    fetchPersonnel()
-      .then((data) => { if (mounted) setPersonnel(data); })
+    fetchProfiles()
+      .then((data) => {
+        if (mounted) {
+          setPersonnel(
+            (data || []).map(profile => ({
+              id: profile.id,
+              name: profile.name?.trim() || profile.username?.trim() || "Unnamed profile",
+            }))
+          );
+        }
+      })
       .catch(() => {});
     return () => { mounted = false; };
   }, []);
@@ -296,7 +305,7 @@ export default function DocumentTracking() {
                   <label className="block text-xs font-medium text-slate-600 mb-1">Assigned Personnel</label>
                   <select value={form.assignedPersonnel} onChange={e => setForm(f => ({ ...f, assignedPersonnel: e.target.value }))}
                     className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 outline-none focus:border-teal-400 bg-white">
-                    <option value="">Select personnel</option>
+                    <option value="">Select person</option>
                     {personnel.map(p => (
                       <option key={p.id} value={p.name}>{p.name}</option>
                     ))}

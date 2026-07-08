@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MdShield, MdDashboard, MdCalendarToday, MdChecklist,
-         MdBarChart, MdCampaign, MdDescription, MdLink, MdClose, MdMenu, MdLogout, MdAssignment } from "react-icons/md";
+         MdBarChart, MdCampaign, MdDescription, MdLink, MdClose, MdMenu, MdLogout, MdAssignment, MdGroup } from "react-icons/md";
 import { useApp } from "../context/AppContext";
 import cbmsLogo from "../../Logos/DASMO_OFFICIAL LOGO.png";
 
@@ -13,6 +13,7 @@ const ALL_NAV = [
   { id: "quick-access",      label: "Quick Links",       icon: MdLink         },
   { id: "announcements",     label: "Announcements",     icon: MdCampaign     },
   { id: "tasks",             label: "Tasks",             icon: MdAssignment   },
+  { id: "personnel",         label: "Manage Personnel",  icon: MdGroup        },
 ];
 
 export default function Sidebar({ active, setActive }) {

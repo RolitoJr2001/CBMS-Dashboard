@@ -45,7 +45,7 @@ export async function getSession() {
 export async function fetchProfiles() {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, name, username")
+    .select("id, name, username, role")
     .order("name", { ascending: true });
   if (error) throw error;
   return data || [];

@@ -169,7 +169,17 @@ export function AppProvider({ children }) {
       })
       .filter(Boolean))];
 
-    if (!recipientIds.length) return [];
+    if (!recipientIds.length) {
+      // This means the assigned name(s) (e.g. from the Personnel picker)
+      // don't exactly match any profile's name/username in the database.
+      // Surface it clearly instead of silently doing nothing, since this
+      // is the most common reason "assign" notifications never arrive.
+      console.warn(
+        `[notifications] No matching viewer account found for assignee(s): ${normalizedTargets.join(", ")}. ` +
+        `Make sure the "personnel" entry's name exactly matches that user's "name" or "username" in the profiles table.`
+      );
+      return [];
+    }
 
     return notify({
       recipients: recipientIds,

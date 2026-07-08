@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { FaPlus, FaEdit, FaTrash, FaTimes, FaCheck, FaSpinner } from "react-icons/fa";
 import { useApp } from "../context/AppContext";
-import { fetchPersonnel } from "../services/personnelService";
+import { fetchProfiles } from "../services/authService";
 
 const typeColors = {
   Deadline: "bg-[#fce8e6] text-[#c5221f] border-[#f4c7c3]",
@@ -46,8 +46,17 @@ export default function CalendarCard() {
 
   useEffect(() => {
     let mounted = true;
-    fetchPersonnel()
-      .then((data) => { if (mounted) setPersonnel(data); })
+    fetchProfiles()
+      .then((data) => {
+        if (mounted) {
+          setPersonnel(
+            (data || []).map(profile => ({
+              id: profile.id,
+              name: profile.name?.trim() || profile.username?.trim() || "Unnamed profile",
+            }))
+          );
+        }
+      })
       .catch(() => {});
     return () => { mounted = false; };
   }, []);
@@ -155,7 +164,7 @@ export default function CalendarCard() {
                     onChange={(e) => setSelectedPersonnelName(e.target.value)}
                     className="flex-1 px-4 py-3 text-sm rounded-2xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm"
                   >
-                    <option value="">Select personnel</option>
+                    <option value="">Select person</option>
                     {personnel
                       .filter(p => !form.assignedPersonnel.includes(p.name))
                       .map(p => (

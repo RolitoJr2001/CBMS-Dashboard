@@ -27,7 +27,14 @@ function isMissingColumnError(error) {
   return /column .* does not exist|undefined column|schema cache/i.test(message);
 }
 
-function buildTemplate(action, params = {}) {
+function buildTemplate(action, rawParams = {}) {
+  // Callers pass entity details (entityName, itemTitle, dueDate, oldStatus,
+  // newStatus, remarks, trackingNumber, assignedTo, etc.) nested inside a
+  // `metadata` object rather than as top-level fields. Merge metadata on
+  // top so the template below can read those values directly — without
+  // this, every notification message fell back to generic placeholders
+  // like "this item" instead of the actual task/document/event title.
+  const params = { ...rawParams, ...(rawParams.metadata || {}) };
   const actorName = params.actorName || "System";
   const entityName = params.entityName || params.itemTitle || params.title || "this item";
   const statusText = params.oldStatus && params.newStatus

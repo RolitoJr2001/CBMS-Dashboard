@@ -19,6 +19,7 @@ import Analytics        from "../components/Analytics";
 import Announcements    from "../components/Announcements";
 import DocumentTracking from "../components/DocumentTracking";
 import TaskPanel        from "../components/TaskPanel";
+import PersonnelManager from "../components/PersonnelManager";
 import TopBar           from "../components/TopBar";
 import Sidebar          from "../components/Sidebar";
 
@@ -51,6 +52,7 @@ export const PAGE_META = {
   announcements:       { title: "Announcements",        desc: "Notice board for offices and field staff" },
   tasks:               { title: "Tasks",                 desc: "Assigned work and follow-up items" },
   analytics:           { title: "Analytics",            desc: "Provincewide CBMS turnover progress" },
+  personnel:           { title: "Manage Personnel",     desc: "Link viewer accounts so assignments and notifications reach them" },
 };
 
 // ─── Sub-components ──────────────────────────────────────────
@@ -88,7 +90,8 @@ function DashboardHome({ setActivePage, requirements, events, upcomingEvents, do
   const totalDocs     = documents.length;
   const inProcessDocs = documents.filter(d => d.status === "In Process").length;
   const completedDocs = documents.filter(d => d.status === "Completed").length;
-  const dashboardTitle = user?.role === "admin" ? "CBMS Admin Dashboard" : "CBMS Viewer Dashboard";
+  const displayName = user?.name || user?.full_name || user?.fullName || user?.username || user?.email || "User";
+  const dashboardTitle = `${displayName} Dashboard`;
 
   const pieData = [
     { name: "Completed", value: completed },
@@ -372,6 +375,9 @@ export default function Dashboard() {
 
       case "tasks":
         return <TaskPanel />;
+
+      case "personnel":
+        return <PersonnelManager />;
 
       default:
         return null;

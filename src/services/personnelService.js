@@ -21,3 +21,25 @@ export async function insertPersonnel(person) {
   if (error) throw error;
   return data;
 }
+
+export async function updatePersonnel(id, name) {
+  const trimmed = name?.trim();
+  if (!trimmed) throw new Error("Personnel name is required.");
+
+  const { data, error } = await supabase
+    .from("personnel")
+    .update({ name: trimmed })
+    .eq("id", id)
+    .select("id, name")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function removePersonnel(id) {
+  const { error } = await supabase
+    .from("personnel")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { MdAssignment, MdAdd, MdClose, MdEdit, MdDelete, MdPending, MdHourglassEmpty } from "react-icons/md";
 import { useApp } from "../context/AppContext";
-import { fetchPersonnel } from "../services/personnelService";
+import { fetchProfiles } from "../services/authService";
 
 const STATUS_OPTIONS = ["Not Started", "Ongoing", "Pending", "Completed"];
 
@@ -39,8 +39,15 @@ export default function TaskPanel() {
     async function loadPersonnel() {
       setPersonnelLoading(true);
       try {
-        const data = await fetchPersonnel();
-        if (mounted) setPersonnelOptions(data || []);
+        const data = await fetchProfiles();
+        if (mounted) {
+          setPersonnelOptions(
+            (data || []).map(profile => ({
+              id: profile.id,
+              name: profile.name?.trim() || profile.username?.trim() || "Unnamed profile",
+            }))
+          );
+        }
       } catch (err) {
         if (mounted) setPersonnelOptions([]);
       } finally {
@@ -190,7 +197,7 @@ export default function TaskPanel() {
                   disabled={personnelLoading}
                   className="flex-1 px-4 py-3 text-sm rounded-2xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm"
                 >
-                  <option value="">{personnelLoading ? "Loading personnel..." : "Select personnel"}</option>
+                  <option value="">{personnelLoading ? "Loading profiles..." : "Select person"}</option>
                   {personnelOptions
                     .filter(person => !form.assignedTo.includes(person.name))
                     .map(person => (
