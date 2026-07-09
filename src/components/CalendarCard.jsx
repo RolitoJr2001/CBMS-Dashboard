@@ -15,11 +15,24 @@ const typeColors = {
   Announcement: "bg-[#e0f2fe] text-[#0369a1] border-[#bae6fd]",
 };
 const EVENT_TYPES = ["Deadline", "Meeting", "Review", "Briefing", "Training/Workshop", "Leave", "Hearing", "Seminar", "Announcement"];
-const EMPTY = { title: "", date: "", time: "", type: "Meeting", description: "", assignedPersonnel: [] };
+const EMPTY = { title: "", date: "", endDate: "", time: "", type: "Meeting", description: "", assignedPersonnel: [] };
 
 function fmtDate(s) {
   const d = new Date(s + "T00:00:00");
   return { mo: d.toLocaleDateString("en-US", { month: "short" }), day: d.getDate() };
+}
+
+// Renders a single date badge for one-day events, or a compact range like
+// "Jul 20 – 23" (or "Jul 20 – Aug 3" across months) for multi-day events.
+function formatEventDateRange(date, endDate) {
+  if (!endDate || endDate === date) {
+    const { mo, day } = fmtDate(date);
+    return `${mo} ${day}`;
+  }
+  const start = fmtDate(date);
+  const end = fmtDate(endDate);
+  const sameMonth = new Date(date + "T00:00:00").getMonth() === new Date(endDate + "T00:00:00").getMonth();
+  return sameMonth ? `${start.mo} ${start.day}–${end.day}` : `${start.mo} ${start.day} – ${end.mo} ${end.day}`;
 }
 
 function formatAssignedPersonnel(value) {
@@ -67,6 +80,7 @@ export default function CalendarCard() {
     setForm({
       title: ev.title,
       date: ev.date,
+      endDate: ev.endDate || ev.date,
       time: ev.time,
       type: ev.type,
       description: ev.description || "",
@@ -84,6 +98,7 @@ export default function CalendarCard() {
     const e = {};
     if (!form.title.trim()) e.title = "Required";
     if (!form.date) e.date = "Required";
+    if (form.endDate && form.date && form.endDate < form.date) e.endDate = "End date can't be before start date";
     if (!form.time.trim()) e.time = "Required";
     setErrors(e); return !Object.keys(e).length;
   }
@@ -144,8 +159,27 @@ export default function CalendarCard() {
                 {errors.title && <p className="mt-1 text-xs text-status-red">{errors.title}</p>}
               </div>
               <div className="sm:col-span-3">
-                <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                <input type="date" value={form.date}
+                  onChange={e => {
+                    const nextDate = e.target.value;
+                    setForm(f => ({
+                      ...f,
+                      date: nextDate,
+                      // Keep the range valid: if the end date is now before
+                      // the new start date (or was never set), snap it to
+                      // the start date instead of leaving an invalid range.
+                      endDate: (!f.endDate || f.endDate < nextDate) ? nextDate : f.endDate,
+                    }));
+                  }}
                   className={`w-full px-4 py-3 text-sm rounded-2xl border outline-none focus:border-teal-400 bg-white shadow-sm ${errors.date ? "border-red-400" : "border-slate-200"}`} />
+                {errors.date && <p className="mt-1 text-xs text-status-red">{errors.date}</p>}
+              </div>
+              <div className="sm:col-span-3">
+                <label className="block text-xs font-medium text-slate-500 mb-1 sm:hidden">End Date</label>
+                <input type="date" value={form.endDate} min={form.date || undefined}
+                  onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
+                  className={`w-full px-4 py-3 text-sm rounded-2xl border outline-none focus:border-teal-400 bg-white shadow-sm ${errors.endDate ? "border-red-400" : "border-slate-200"}`} />
+                {errors.endDate && <p className="mt-1 text-xs text-status-red">{errors.endDate}</p>}
               </div>
               <div className="sm:col-span-3">
                 <input type="time" value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
@@ -229,15 +263,19 @@ export default function CalendarCard() {
           <ul className="divide-y divide-slate-50">
             {upcomingEvents.map(ev => {
               const { mo, day } = fmtDate(ev.date);
+              const isMultiDay = ev.endDate && ev.endDate !== ev.date;
               return (
                 <li key={ev.id} className="flex items-center gap-3 py-2.5 group">
-                  <div className="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-navy-900 text-white shrink-0">
+                  <div className="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-navy-900 text-white shrink-0 px-1 text-center">
                     <span className="text-[9px] uppercase leading-none opacity-70">{mo}</span>
-                    <span className="text-sm font-bold leading-none">{day}</span>
+                    <span className={`font-bold leading-none ${isMultiDay ? "text-[10px]" : "text-sm"}`}>
+                      {isMultiDay ? `${day}–${fmtDate(ev.endDate).day}` : day}
+                    </span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-navy-900 truncate">{ev.title}</p>
                     <p className="text-xs text-slate-400">
+                      {isMultiDay ? `${formatEventDateRange(ev.date, ev.endDate)} · ` : ""}
                       {ev.time}
                       {formatAssignedPersonnel(ev.assignedPersonnel) ? ` · Assigned to ${formatAssignedPersonnel(ev.assignedPersonnel)}` : ""}
                       {ev.description ? ` · ${ev.description}` : ""}

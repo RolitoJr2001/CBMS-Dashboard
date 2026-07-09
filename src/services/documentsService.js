@@ -13,6 +13,31 @@ function matchesAssignedUser(doc, user) {
   return values.includes(assignedValue);
 }
 
+function isMissingColumnError(error) {
+  const message = error?.message || "";
+  return /column .* does not exist|undefined column|schema cache/i.test(message);
+}
+
+// Insert a document_history row with the enriched routing fields
+// (from_office/to_office/assigned_personnel/status/remarks). If those
+// columns don't exist yet (migration 011 not applied), fall back to the
+// original minimal set of columns instead of silently dropping the
+// history entry entirely.
+async function insertHistoryWithFallback(payload) {
+  const { error } = await supabase.from("document_history").insert(payload);
+  if (!error) return;
+  if (!isMissingColumnError(error)) throw error;
+
+  const basePayload = {
+    document_id: payload.document_id,
+    office: payload.office,
+    action: payload.action,
+    created_by: payload.created_by,
+  };
+  const { error: fallbackError } = await supabase.from("document_history").insert(basePayload);
+  if (fallbackError) throw fallbackError;
+}
+
 // ─── Map DB row → app shape ───────────────────────────────────
 function fromDb(row) {
   return {
@@ -32,11 +57,16 @@ function fromDb(row) {
     attachmentUrl:      row.attachment_url || null,
     history:            row.document_history
       ? row.document_history.map(h => ({
-          office:    h.office,
+          office:            h.office,
+          fromOffice:        h.from_office || null,
+          toOffice:          h.to_office || h.office || null,
           timestamp: h.timestamp
             ? new Date(h.timestamp).toLocaleString("sv-SE").replace("T", " ").slice(0, 16)
             : "",
-          action:    h.action,
+          action:            h.action,
+          assignedPersonnel: h.assigned_personnel || null,
+          status:            h.status || null,
+          remarks:           h.remarks || null,
         }))
       : [],
   };
@@ -56,7 +86,7 @@ export async function fetchDocuments(user = null) {
   if (ids.length > 0) {
     const { data: historyRows, error: historyError } = await supabase
       .from("document_history")
-      .select("document_id, office, action, timestamp")
+      .select("document_id, office, from_office, to_office, action, assigned_personnel, status, remarks, timestamp")
       .in("document_id", ids)
       .order("timestamp", { ascending: true });
 
@@ -67,10 +97,15 @@ export async function fetchDocuments(user = null) {
       if (!acc[key]) acc[key] = [];
       acc[key].push({
         office: row.office,
+        from_office: row.from_office,
+        to_office: row.to_office,
         timestamp: row.timestamp
           ? new Date(row.timestamp).toLocaleString("sv-SE").replace("T", " ").slice(0, 16)
           : "",
         action: row.action,
+        assigned_personnel: row.assigned_personnel,
+        status: row.status,
+        remarks: row.remarks,
       });
       return acc;
     }, {});
@@ -124,11 +159,16 @@ export async function insertDocument(doc, userId) {
 
   // Insert first history entry
   try {
-    await supabase.from("document_history").insert({
-      document_id: createdId,
-      office:      doc.originatingOffice,
-      action:      "Received",
-      created_by:  userId,
+    await insertHistoryWithFallback({
+      document_id:        createdId,
+      office:              doc.originatingOffice,
+      from_office:         null,
+      to_office:           doc.originatingOffice,
+      action:              "Received",
+      assigned_personnel:  doc.assignedPersonnel || null,
+      status:              doc.status || "Received",
+      remarks:             doc.remarks || null,
+      created_by:          userId,
     });
   } catch (historyError) {
     console.warn("Document history write skipped:", historyError?.message || historyError);
@@ -139,10 +179,10 @@ export async function insertDocument(doc, userId) {
 
 // ─── Update document (+ add history if office changed) ────────
 export async function patchDocument(id, changes, userId) {
-  // Fetch current to compare office
+  // Fetch current to compare office/status
   const { data: current, error: currentError } = await supabase
     .from("documents")
-    .select("current_office, status")
+    .select("current_office, status, assigned_personnel, remarks")
     .eq("id", id)
     .single();
   if (currentError) throw currentError;
@@ -179,14 +219,24 @@ export async function patchDocument(id, changes, userId) {
     .maybeSingle();
   if (error) throw error;
 
-  // Add history entry if office changed
-  if (changes.currentOffice && current && changes.currentOffice !== current.current_office) {
+  // Add a routing history entry whenever the office or the status
+  // changes — previously this only fired on an office change, so a
+  // status-only transition (e.g. marking a document "Approved" or
+  // "Completed" without moving it) never showed up in Routing History.
+  const officeChanged = changes.currentOffice && current && changes.currentOffice !== current.current_office;
+  const statusChanged = changes.status && current && changes.status !== current.status;
+  if (officeChanged || statusChanged) {
     try {
-      await supabase.from("document_history").insert({
-        document_id: id,
-        office:      changes.currentOffice,
-        action:      changes.status || "Updated",
-        created_by:  userId,
+      await insertHistoryWithFallback({
+        document_id:        id,
+        office:              changes.currentOffice || current?.current_office,
+        from_office:         officeChanged ? current?.current_office : null,
+        to_office:           changes.currentOffice || current?.current_office,
+        action:              changes.status || current?.status || "Updated",
+        assigned_personnel:  changes.assignedPersonnel ?? current?.assigned_personnel ?? null,
+        status:              changes.status || current?.status || null,
+        remarks:             changes.remarks ?? current?.remarks ?? null,
+        created_by:          userId,
       });
     } catch (historyError) {
       console.warn("Document history write skipped:", historyError?.message || historyError);
@@ -195,7 +245,7 @@ export async function patchDocument(id, changes, userId) {
 
   const { data: historyRows, error: historyError } = await supabase
     .from("document_history")
-    .select("office, action, timestamp")
+    .select("office, from_office, to_office, action, assigned_personnel, status, remarks, timestamp")
     .eq("document_id", id)
     .order("timestamp", { ascending: true });
   if (historyError) throw historyError;

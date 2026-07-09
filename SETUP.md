@@ -234,3 +234,22 @@ npm run build
 - `postcss.config.js`
 - `vite.config.js`
 - `index.html`
+
+---
+
+## Pending migrations (run these next, in order)
+
+These were added after the initial setup above and have **not** been run yet if you haven't applied them in the Supabase SQL Editor:
+
+| File | Purpose |
+|------|---------|
+| `supabase/migrations/011_document_history_enrichment.sql` | Adds From Office / To Office / Assigned / Status / Remarks columns to `document_history` so the redesigned Routing History timeline can display them |
+| `supabase/migrations/012_calendar_event_end_date.sql` | Adds `end_date` to `calendar_events` for multi-day Schedule & Events |
+| `supabase/migrations/013_notifications_realtime.sql` | **Fixes assignment notifications not arriving live.** Adds `public.notifications` (and `public.tasks`) to the `supabase_realtime` publication — without this, the app's realtime subscriptions never receive INSERT/UPDATE/DELETE events, so an already-open dashboard won't show a new notification until the page is reloaded |
+
+Run each file's contents in **Supabase Dashboard → SQL Editor**, in numeric order, the same way as the earlier migrations.
+
+### If migration 013 fails with "relation supabase_realtime does not exist" or a permissions error
+Some Supabase projects manage realtime publication membership through the Dashboard instead of SQL. If the `ALTER PUBLICATION` statement errors out, do this instead:
+1. Go to **Database → Replication** in the Supabase Dashboard.
+2. Find the `supabase_realtime` publication and enable it for the `notifications` and `tasks` tables.

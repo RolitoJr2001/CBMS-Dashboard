@@ -45,6 +45,8 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
     upcomingEvents,
     documents,
     notifications,
+    notificationWarning,
+    dismissNotificationWarning,
     user,
     markNotificationRead,
     markAllNotificationsRead,
@@ -132,7 +134,23 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
   }
 
   return (
-    <header className="h-16 bg-white border-b border-slate-100 flex items-center justify-end w-full px-6 gap-4 sticky top-0 z-30">
+    <>
+      {notificationWarning && (
+        <div className="sticky top-0 z-40 bg-status-yellowBg border-b border-status-yellow/30 px-6 py-2 flex items-center justify-between gap-3">
+          <p className="text-xs text-status-yellow font-medium">
+            ⚠ {notificationWarning.message}
+            {notificationWarning.detail && <span className="hidden sm:inline text-status-yellow/80"> {notificationWarning.detail}</span>}
+          </p>
+          <button
+            type="button"
+            onClick={dismissNotificationWarning}
+            className="text-status-yellow hover:text-status-yellow/70 text-xs font-semibold shrink-0"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+      <header className="h-16 bg-white border-b border-slate-100 flex items-center justify-end w-full px-6 gap-4 sticky top-0 z-30">
 
       {/* Right: search + date + notif + user */}
       <div className="ml-auto flex items-center gap-3 shrink-0">
@@ -231,5 +249,6 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
         </div>
       </div>
     </header>
+    </>
   );
 }

@@ -52,12 +52,38 @@ import {
 
 const AppContext = createContext(null);
 
+// assigned_to is stored in the DB as a JSON-encoded string (see
+// serializeAssignedTo in tasksService.js). The initial fetch path
+// (tasksService.fromDb) parses this back into an array, but this
+// realtime-only mapper didn't — so a task pushed over the
+// "tasks-realtime" channel arrived with assignedTo as a raw JSON
+// string instead of an array, which could never match a Viewer's
+// name/username in TaskPanel's assignment filter. That's the root
+// cause of "No tasks assigned yet" showing for a Viewer whose task
+// was just created/updated by an Admin, even though a manual page
+// refresh (which re-runs the correctly-parsing fetch) shows it fine.
+// Mirrors normalizeAssignedTo() in tasksService.js.
+function normalizeAssignedToRealtime(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.filter(Boolean);
+    } catch {
+      return [trimmed];
+    }
+  }
+  return [];
+}
+
 function fromDbTask(row) {
   return {
     id: row.id,
     title: row.title,
     description: row.description || "",
-    assignedTo: row.assigned_to || "",
+    assignedTo: normalizeAssignedToRealtime(row.assigned_to || ""),
     assignedBy: row.assigned_by || "",
     dueDate: row.due_date || "",
     status: row.status || "Pending",
@@ -77,6 +103,10 @@ export function AppProvider({ children }) {
   const [documents,    setDocuments]    = useState([]);
   const [tasks,         setTasks]         = useState([]);
   const [notifications, setNotifications] = useState([]);
+  // Set when an assignment can't be matched to a viewer account, so the
+  // admin sees why a notification didn't go out instead of it failing
+  // silently (see notifyAssignmentToRecipients below).
+  const [notificationWarning, setNotificationWarning] = useState(null);
 
   // ── Loading / error per-entity ────────────────────────────
   const [loading, setLoading] = useState({ events: false, requirements: false, documents: false, tasks: false });
@@ -159,27 +189,44 @@ export function AppProvider({ children }) {
 
     if (!normalizedTargets.length) return [];
 
-    const recipientIds = [...new Set((profiles || [])
-      .map(profile => {
-        const profileValues = [profile?.username, profile?.name, profile?.full_name, profile?.fullName]
-          .filter(Boolean)
-          .map(item => String(item).trim().toLowerCase());
+    const profileValueSets = (profiles || []).map(profile => ({
+      profile,
+      values: [profile?.username, profile?.name, profile?.full_name, profile?.fullName]
+        .filter(Boolean)
+        .map(item => String(item).trim().toLowerCase()),
+    }));
 
-        return profileValues.some(candidate => normalizedTargets.includes(candidate)) ? profile?.id : null;
+    const matchedTargets = new Set();
+    const recipientIds = [...new Set(profileValueSets
+      .map(({ profile, values }) => {
+        const matchedTarget = normalizedTargets.find(target => values.includes(target));
+        if (matchedTarget) matchedTargets.add(matchedTarget);
+        return matchedTarget ? profile?.id : null;
       })
       .filter(Boolean))];
 
-    if (!recipientIds.length) {
-      // This means the assigned name(s) (e.g. from the Personnel picker)
-      // don't exactly match any profile's name/username in the database.
-      // Surface it clearly instead of silently doing nothing, since this
-      // is the most common reason "assign" notifications never arrive.
+    const unmatchedTargets = normalizedTargets.filter(target => !matchedTargets.has(target));
+
+    if (unmatchedTargets.length) {
+      // The assigned name(s) don't exactly match any profile's name/username
+      // in the database — this is the most common reason "assign"
+      // notifications never arrive. Log it for developers AND surface it
+      // to the admin in the UI, since a console-only warning is invisible
+      // in normal use and the assignment otherwise silently fails to notify.
       console.warn(
-        `[notifications] No matching viewer account found for assignee(s): ${normalizedTargets.join(", ")}. ` +
+        `[notifications] No matching viewer account found for assignee(s): ${unmatchedTargets.join(", ")}. ` +
         `Make sure the "personnel" entry's name exactly matches that user's "name" or "username" in the profiles table.`
       );
-      return [];
+      setNotificationWarning({
+        id: Date.now(),
+        message: unmatchedTargets.length === 1
+          ? `"${unmatchedTargets[0]}" isn't linked to a viewer account, so they won't get an assignment notification.`
+          : `${unmatchedTargets.length} assigned personnel aren't linked to a viewer account, so they won't get assignment notifications.`,
+        detail: `Unmatched: ${unmatchedTargets.join(", ")}. Link them in Personnel Manager so their name/username matches exactly.`,
+      });
     }
+
+    if (!recipientIds.length) return [];
 
     return notify({
       recipients: recipientIds,
@@ -639,7 +686,7 @@ export function AppProvider({ children }) {
   }, [pushNotification]);
 
   const upcomingEvents = [...events]
-    .filter(e => new Date(e.date + "T23:59:59") >= new Date())
+    .filter(e => new Date((e.endDate || e.date) + "T23:59:59") >= new Date())
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
   // ── Requirements ─────────────────────────────────────────
@@ -918,6 +965,8 @@ export function AppProvider({ children }) {
       tasks, addTask, updateTask, deleteTask,
       // notifications
       notifications, pushNotification, notify,
+      notificationWarning,
+      dismissNotificationWarning: () => setNotificationWarning(null),
       markNotificationRead: handleMarkNotificationRead,
       markAllNotificationsRead: handleMarkAllNotificationsRead,
       deleteNotification: handleDeleteNotification,

@@ -257,88 +257,92 @@ export default function TaskPanel() {
         </div>
       )}
 
-      <div className="space-y-3">
-        {myTasks.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">No tasks assigned yet.</div>
-        ) : myTasks.map(task => (
-          <div key={task.id} className="rounded-xl border border-slate-100 p-4 space-y-2">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-navy-900">{task.title}</p>
-                <p className="text-xs text-slate-500">{task.description || "No description provided."}</p>
-              </div>
-              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${task.status === "Completed" ? "bg-status-greenBg text-status-green" : task.status === "Ongoing" || task.status === "In Progress" ? "bg-status-yellowBg text-status-yellow" : task.status === "Pending" ? "bg-status-redBg text-status-red" : "bg-slate-100 text-slate-600"}`}>
-                {task.status}
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-              <span className="flex items-center gap-1"><MdPending /> Assigned to {formatAssignedPersonnel(task.assignedTo) || "Unassigned"}</span>
-              <span className="flex items-center gap-1"><MdPending /> Assigned by {task.assignedBy || "Admin"}</span>
-              <span className="flex items-center gap-1"><MdHourglassEmpty /> {task.dueDate || "No due date"}</span>
-            </div>
-            <div className="flex flex-col gap-2 pt-1">
-              <select value={task.status} onChange={(e) => handleStatusChange(task.id, e.target.value)} className="text-sm px-2 py-1 rounded border border-slate-200 bg-white w-fit">
-                {STATUS_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
-              </select>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={remarkDrafts[task.id] ?? ""}
-                    onChange={(e) => handleRemarksDraft(task.id, e.target.value)}
-                    placeholder="Add remark"
-                    className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 bg-white"
-                  />
-                  <button
-                    onClick={() => handleRemarksSubmit(task.id)}
-                    className="px-2.5 py-1.5 text-xs font-medium rounded bg-navy-900 text-white hover:bg-navy-800"
-                  >
-                    Submit
-                  </button>
+      {myTasks.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">No tasks assigned yet.</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {myTasks.map(task => (
+            <div key={task.id} className="rounded-xl border border-slate-100 p-3.5 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-navy-900 truncate">{task.title}</p>
+                  <p className="text-xs text-slate-500 line-clamp-2">{task.description || "No description provided."}</p>
                 </div>
-                <div className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Remarks</p>
-                  <p className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">
-                    {(task.remarks || "").trim() ? task.remarks : "No remarks yet."}
-                  </p>
+                <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${task.status === "Completed" ? "bg-status-greenBg text-status-green" : task.status === "Ongoing" || task.status === "In Progress" ? "bg-status-yellowBg text-status-yellow" : task.status === "Pending" ? "bg-status-redBg text-status-red" : "bg-slate-100 text-slate-600"}`}>
+                  {task.status}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                <span className="flex items-center gap-1"><MdPending /> {formatAssignedPersonnel(task.assignedTo) || "Unassigned"}</span>
+                <span className="flex items-center gap-1"><MdHourglassEmpty /> {task.dueDate || "No due date"}</span>
+              </div>
+              <div className="flex flex-col gap-2 pt-1">
+                <select value={task.status} onChange={(e) => handleStatusChange(task.id, e.target.value)} className="text-xs px-2 py-1 rounded border border-slate-200 bg-white w-fit">
+                  {STATUS_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                </select>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={remarkDrafts[task.id] ?? ""}
+                      onChange={(e) => handleRemarksDraft(task.id, e.target.value)}
+                      placeholder="Add remark"
+                      className="w-full px-2 py-1.5 text-xs rounded border border-slate-200 bg-white"
+                    />
+                    <button
+                      onClick={() => handleRemarksSubmit(task.id)}
+                      className="px-2 py-1.5 text-[11px] font-medium rounded bg-navy-900 text-white hover:bg-navy-800 whitespace-nowrap"
+                    >
+                      Submit
+                    </button>
+                  </div>
+                  <div className="rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Remarks</p>
+                    <p className="mt-0.5 text-xs text-slate-700 whitespace-pre-wrap line-clamp-3">
+                      {(task.remarks || "").trim() ? task.remarks : "No remarks yet."}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center gap-2">
+                  <p className="text-[10px] text-slate-400 truncate">By {task.assignedBy || "Admin"}</p>
+                  <div className="flex items-center gap-1">
+                    {isAdmin && (
+                      <button
+                        onClick={() => {
+                          setEditTaskId(task.id);
+                          setForm({
+                            title: task.title,
+                            description: task.description || "",
+                            assignedTo: Array.isArray(task.assignedTo) ? task.assignedTo : [task.assignedTo].filter(Boolean),
+                            dueDate: task.dueDate || "",
+                            status: task.status || "Not Started",
+                            remarks: task.remarks || "",
+                          });
+                          setSelectedPersonnelName("");
+                          setShowForm(true);
+                        }}
+                        className="inline-flex items-center justify-center rounded-full p-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+                        aria-label="Edit task"
+                      >
+                        <MdEdit className="text-sm" />
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleDelete(task.id)}
+                        className="inline-flex items-center justify-center rounded-full p-1.5 text-status-red hover:bg-status-red/10 transition-colors"
+                        aria-label="Delete task"
+                      >
+                        <MdDelete className="text-sm" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="flex justify-between items-center gap-2">
-                {isAdmin && (
-                  <button
-                    onClick={() => {
-                      setEditTaskId(task.id);
-                      setForm({
-                        title: task.title,
-                        description: task.description || "",
-                        assignedTo: Array.isArray(task.assignedTo) ? task.assignedTo : [task.assignedTo].filter(Boolean),
-                        dueDate: task.dueDate || "",
-                        status: task.status || "Not Started",
-                        remarks: task.remarks || "",
-                      });
-                      setSelectedPersonnelName("");
-                      setShowForm(true);
-                    }}
-                    className="inline-flex items-center justify-center rounded-full p-2 bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
-                    aria-label="Edit task"
-                  >
-                    <MdEdit className="text-base" />
-                  </button>
-                )}
-                {isAdmin && (
-                  <button
-                    onClick={() => handleDelete(task.id)}
-                    className="inline-flex items-center justify-center rounded-full p-2 text-status-red hover:bg-status-red/10 transition-colors"
-                    aria-label="Delete task"
-                  >
-                    <MdDelete className="text-base" />
-                  </button>
-                )}
-              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

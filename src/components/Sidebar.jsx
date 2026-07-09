@@ -7,13 +7,13 @@ import cbmsLogo from "../../Logos/DASMO_OFFICIAL LOGO.png";
 const ALL_NAV = [
   { id: "dashboard",         label: "Dashboard",         icon: MdDashboard    },
   { id: "calendar",          label: "Schedule & Events", icon: MdCalendarToday },
+  { id: "tasks",             label: "Tasks",             icon: MdAssignment   },
+  { id: "document-tracking", label: "Document Tracking", icon: MdDescription  },
   { id: "checklist",         label: "Requirements",      icon: MdChecklist    },
   { id: "monitoring",        label: "Monitoring",        icon: MdBarChart     },
-  { id: "document-tracking", label: "Document Tracking", icon: MdDescription  },
+  { id: "personnel",         label: "Manage Personnel",  icon: MdGroup        },
   { id: "quick-access",      label: "Quick Links",       icon: MdLink         },
   { id: "announcements",     label: "Announcements",     icon: MdCampaign     },
-  { id: "tasks",             label: "Tasks",             icon: MdAssignment   },
-  { id: "personnel",         label: "Manage Personnel",  icon: MdGroup        },
 ];
 
 export default function Sidebar({ active, setActive }) {
@@ -21,7 +21,7 @@ export default function Sidebar({ active, setActive }) {
   const [loggingOut,   setLoggingOut]   = useState(false);
   const { user, logout } = useApp();
   const isAdmin = user?.role === "admin";
-  const viewerNavIds = ["dashboard", "calendar", "checklist", "monitoring", "document-tracking", "announcements", "tasks"];
+  const viewerNavIds = ["dashboard", "calendar", "tasks", "document-tracking", "checklist", "monitoring", "announcements"];
   const NAV = isAdmin
     ? ALL_NAV
     : ALL_NAV.filter(item => viewerNavIds.includes(item.id));

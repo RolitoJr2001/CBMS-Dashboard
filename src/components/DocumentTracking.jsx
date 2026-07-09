@@ -30,6 +30,17 @@ function getDocumentDirection(doc) {
   return doc?.dateReleased ? "Outgoing" : "Incoming";
 }
 
+// Icon + color per routing action, used by the Routing History timeline.
+// Falls back to a generic "list" icon for actions we don't explicitly know.
+function routingActionMeta(action) {
+  const key = String(action || "").trim().toLowerCase();
+  if (key.includes("receiv")) return { icon: FaInbox, color: "bg-navy-50 text-navy-700" };
+  if (key.includes("forward") || key.includes("process")) return { icon: FaPaperPlane, color: "bg-teal-50 text-teal-700" };
+  if (key.includes("return")) return { icon: FaExclamationCircle, color: "bg-status-redBg text-status-red" };
+  if (key.includes("complet") || key.includes("approv") || key.includes("releas")) return { icon: FaCheckCircle, color: "bg-status-greenBg text-status-green" };
+  return { icon: FaListAlt, color: "bg-slate-100 text-slate-600" };
+}
+
 const EMPTY_FORM = {
   trackingNumber: getTrackingNumberPrefix(), title: "", category: "Letter", subject: "",
   dateReceived: new Date().toISOString().split("T")[0], dateReleased: "",
@@ -383,22 +394,54 @@ export default function DocumentTracking() {
           {/* Routing history panel */}
           {historyDoc && (
             <div className="bg-white rounded-xl border border-navy-100 p-5">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold text-navy-900">Routing History — {historyDoc.trackingNumber}</p>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm font-semibold text-navy-900">Routing History</p>
+                  <p className="text-xs text-slate-400">{historyDoc.trackingNumber}</p>
+                </div>
                 <button onClick={() => setHistoryId(null)} className="text-slate-400 hover:text-slate-600"><FaTimes /></button>
               </div>
-              <ol className="relative border-l border-teal-200 ml-3">
-                {(historyDoc.history || []).map((h, i) => (
-                  <li key={i} className="mb-4 ml-4">
-                    <span className="absolute -left-1.5 flex items-center justify-center w-3 h-3 rounded-full bg-teal-500 ring-4 ring-white" />
-                    <p className="text-sm font-medium text-navy-900">{h.action} → {h.office}</p>
-                    <p className="text-xs text-slate-500">{h.timestamp}</p>
-                  </li>
-                ))}
-                {(!historyDoc.history || historyDoc.history.length === 0) && (
-                  <li className="ml-4 text-sm text-slate-400">No history available.</li>
-                )}
-              </ol>
+
+              {(!historyDoc.history || historyDoc.history.length === 0) ? (
+                <p className="text-sm text-slate-400 py-2">No history available.</p>
+              ) : (
+                <ol>
+                  {historyDoc.history.map((h, i) => {
+                    const isLast = i === historyDoc.history.length - 1;
+                    const meta = routingActionMeta(h.action);
+                    const Icon = meta.icon;
+                    const fromOffice = h.fromOffice || (i === 0 ? null : historyDoc.history[i - 1]?.toOffice);
+                    const toOffice = h.toOffice || h.office;
+                    return (
+                      <li key={i} className="relative pl-9 pb-6 last:pb-0">
+                        {!isLast && (
+                          <span className="absolute left-[13px] top-7 bottom-0 w-px bg-slate-200" aria-hidden="true" />
+                        )}
+                        <span className={`absolute left-0 top-0 flex items-center justify-center w-7 h-7 rounded-full ${meta.color} ring-4 ring-white`}>
+                          <Icon className="text-xs" />
+                        </span>
+
+                        <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3.5 py-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-navy-900">{h.action || "Update"}</p>
+                            <p className="text-[11px] text-slate-400 whitespace-nowrap">{h.timestamp || "—"}</p>
+                          </div>
+                          <p className="text-xs text-slate-600 mt-0.5">
+                            {fromOffice ? `${fromOffice} → ${toOffice || "—"}` : (toOffice || "—")}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                            {h.assignedPersonnel && <span>Assigned: <span className="text-slate-700 font-medium">{h.assignedPersonnel}</span></span>}
+                            {h.status && <span>Status: <span className="text-slate-700 font-medium">{h.status}</span></span>}
+                          </div>
+                          {h.remarks && (
+                            <p className="mt-2 text-xs text-slate-600 whitespace-pre-wrap">Remarks: {h.remarks}</p>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
             </div>
           )}
 
@@ -443,10 +486,10 @@ export default function DocumentTracking() {
                 <thead>
                   <tr className="text-left text-xs text-slate-500 uppercase tracking-wide border-b border-slate-100 bg-slate-50">
                     <th className="py-3 px-4 font-medium">Tracking No.</th>
+                    <th className="py-3 px-4 font-medium">Direction</th>
                     <th className="py-3 px-4 font-medium">Title / Category</th>
                     <th className="py-3 px-4 font-medium">Current Office</th>
                     <th className="py-3 px-4 font-medium">Date Received</th>
-                    <th className="py-3 px-4 font-medium">Direction</th>
                     <th className="py-3 px-4 font-medium">Status</th>
                     <th className="py-3 px-4 font-medium">Remarks</th>
                     <th className="py-3 px-4 font-medium text-right">Actions</th>
@@ -459,15 +502,6 @@ export default function DocumentTracking() {
                         <span className="text-xs font-mono text-navy-700 bg-navy-50 px-2 py-0.5 rounded">{doc.trackingNumber}</span>
                       </td>
                       <td className="py-3 px-4">
-                        <p className="font-medium text-navy-900 truncate max-w-[200px]">{doc.title}</p>
-                        <p className="text-xs text-slate-500">{doc.category} · {doc.subject?.slice(0, 40)}{doc.subject?.length > 40 ? "…" : ""}</p>
-                      </td>
-                      <td className="py-3 px-4">
-                        <p className="text-sm text-navy-900">{doc.currentOffice}</p>
-                        <p className="text-xs text-slate-500">Assigned: {doc.assignedPersonnel || "—"}</p>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-slate-600">{doc.dateReceived}</td>
-                      <td className="py-3 px-4">
                         <div className="flex flex-col gap-1">
                           <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${getDocumentDirection(doc) === "Outgoing" ? "bg-teal-50 text-teal-700" : "bg-navy-50 text-navy-700"}`}>
                             {getDocumentDirection(doc)}
@@ -477,6 +511,15 @@ export default function DocumentTracking() {
                           </span>
                         </div>
                       </td>
+                      <td className="py-3 px-4">
+                        <p className="font-medium text-navy-900 truncate max-w-[200px]">{doc.title}</p>
+                        <p className="text-xs text-slate-500">{doc.category} · {doc.subject?.slice(0, 40)}{doc.subject?.length > 40 ? "…" : ""}</p>
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="text-sm text-navy-900">{doc.currentOffice}</p>
+                        <p className="text-xs text-slate-500">Assigned: {doc.assignedPersonnel || "—"}</p>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-slate-600">{doc.dateReceived}</td>
                       <td className="py-3 px-4">
                         <select
                           value={doc.status}

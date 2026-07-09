@@ -4,7 +4,22 @@ import {
 } from "recharts";
 import { useApp } from "../context/AppContext";
 
-const COLORS = { Completed: "#1f9d55", Ongoing: "#c79a12", Pending: "#d23c3c", "For Review": "#0e2c4f" };
+// Fixed, name-keyed palette so a given status always renders in the same
+// color across reloads/re-renders (order-based color assignment would drift
+// whenever the sorted slice order changes). "Other" always maps to slate.
+const COLORS = {
+  Completed: "#1f9d55",
+  Ongoing: "#c79a12",
+  Pending: "#d23c3c",
+  "For Review": "#0e2c4f",
+  Returned: "#7c3aed",
+  Other: "#64748b",
+};
+
+// Statuses that get their own slice; anything else (including future/custom
+// statuses) rolls up into a single "Other" slice instead of silently being
+// dropped from the chart.
+const PRIMARY_STATUSES = ["Completed", "Ongoing", "Pending"];
 
 export default function Analytics() {
   const { requirements } = useApp();
@@ -14,10 +29,31 @@ export default function Analytics() {
   const pending      = requirements.filter(r => r.status === "Pending").length;
   const rate         = total ? Math.round((completed / total) * 100) : 0;
 
+  // Build slices for the primary statuses, then roll up every remaining
+  // status (e.g. "For Review", "Returned") into a single "Other" slice —
+  // previously those statuses were silently excluded from the chart.
+  const statusCounts = requirements.reduce((acc, r) => {
+    const status = r.status || "Unknown";
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+
+  let otherCount = 0;
+  const primaryEntries = [];
+  for (const [status, count] of Object.entries(statusCounts)) {
+    if (PRIMARY_STATUSES.includes(status)) {
+      primaryEntries.push({ name: status, value: count });
+    } else {
+      otherCount += count;
+    }
+  }
+
+  // Largest → smallest, with "Other" always pinned to the end regardless
+  // of its value (per requirement — not just "usually last if smallest").
+  primaryEntries.sort((a, b) => b.value - a.value);
   const pieData = [
-    { name: "Completed", value: completed },
-    { name: "Ongoing",   value: ongoing   },
-    { name: "Pending",   value: pending   },
+    ...primaryEntries,
+    ...(otherCount > 0 ? [{ name: "Other", value: otherCount }] : []),
   ].filter(d => d.value > 0);
 
   const byOffice = requirements.reduce((acc, r) => {
@@ -50,7 +86,16 @@ export default function Analytics() {
           <div className="h-52">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={75} paddingAngle={3}>
+                <Pie
+                  data={pieData}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={52}
+                  outerRadius={75}
+                  paddingAngle={3}
+                  startAngle={90}
+                  endAngle={-270}
+                >
                   {pieData.map(e => <Cell key={e.name} fill={COLORS[e.name] || "#94a3b8"} />)}
                 </Pie>
                 <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} />
