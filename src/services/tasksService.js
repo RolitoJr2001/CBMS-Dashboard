@@ -35,7 +35,9 @@ function fromDb(row) {
     assignedBy: row.assigned_by || "",
     dueDate: row.due_date || "",
     status: row.status || "Pending",
+    priority: row.priority || "Medium",
     remarks: row.remarks || "",
+    attachmentPath: row.attachment_url || null,
     createdAt: row.created_at,
   };
 }
@@ -66,7 +68,9 @@ export async function insertTask(task, userId, currentUsername) {
     assigned_by: currentUsername || "",
     due_date: task.dueDate || null,
     status: task.status || "Pending",
+    priority: task.priority || "Medium",
     remarks: task.remarks || "",
+    attachment_url: task.attachmentPath || null,
     created_by: userId || null,
   };
 
@@ -89,6 +93,10 @@ export async function patchTask(id, changes) {
     payload.due_date = payload.dueDate || null;
     delete payload.dueDate;
   }
+  if (Object.prototype.hasOwnProperty.call(payload, "attachmentPath")) {
+    payload.attachment_url = payload.attachmentPath || null;
+    delete payload.attachmentPath;
+  }
   const { data, error } = await supabase
     .from("tasks")
     .update(payload)
@@ -105,4 +113,29 @@ export async function removeTask(id) {
     .delete()
     .eq("id", id);
   if (error) throw error;
+}
+
+// ─── Task attachments ──────────────────────────────────────────
+// Mirrors documentsService.js's uploadAttachment/getAttachmentUrl:
+// the bucket is private, so we store the storage *path* on the task
+// row (task.attachment_url) and mint a fresh signed URL — valid for
+// 1 hour — every time it needs to be viewed/downloaded.
+
+export async function uploadTaskAttachment(file, taskId) {
+  const ext  = file.name.split(".").pop();
+  const path = `${taskId}/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from("task-attachments")
+    .upload(path, file, { upsert: true });
+  if (error) throw error;
+  return path;
+}
+
+export async function getTaskAttachmentUrl(path) {
+  if (!path) return null;
+  const { data, error } = await supabase.storage
+    .from("task-attachments")
+    .createSignedUrl(path, 3600);
+  if (error) throw error;
+  return data.signedUrl;
 }

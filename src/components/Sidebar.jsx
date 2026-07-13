@@ -21,7 +21,7 @@ export default function Sidebar({ active, setActive }) {
   const [loggingOut,   setLoggingOut]   = useState(false);
   const { user, logout } = useApp();
   const isAdmin = user?.role === "admin";
-  const viewerNavIds = ["dashboard", "calendar", "tasks", "document-tracking", "checklist", "monitoring", "announcements"];
+  const viewerNavIds = ["dashboard", "calendar", "tasks", "document-tracking", "checklist", "monitoring", "quick-access", "announcements"];
   const NAV = isAdmin
     ? ALL_NAV
     : ALL_NAV.filter(item => viewerNavIds.includes(item.id));

@@ -3,9 +3,14 @@ import {
   FaFileAlt, FaPlus, FaEdit, FaTrash, FaTimes, FaCheck,
   FaSearch, FaFilter, FaHistory, FaInbox, FaPaperPlane,
   FaSpinner, FaCheckCircle, FaExclamationCircle, FaListAlt,
+  FaFileExcel,
 } from "react-icons/fa";
 import { useApp } from "../context/AppContext";
 import { fetchProfiles } from "../services/authService";
+import PersonnelChip from "./PersonnelChip";
+import RemarksThread from "./RemarksThread";
+import { getPersonnelOptionStyle } from "../utils/personnelColors";
+import { exportDocumentTrackingToExcel } from "../utils/exportDocumentTrackingToExcel";
 
 const STATUS_OPTIONS   = ["Received", "In Process", "Forwarded", "Released", "Completed", "Returned"];
 const CATEGORY_OPTIONS = ["Agreement", "Compliance", "Memorandum", "Letter", "Report", "Order", "Form", "Other"];
@@ -57,7 +62,11 @@ function DocBadge({ status }) {
 }
 
 export default function DocumentTracking() {
-  const { documents, addDocument, updateDocument, deleteDocument, isDuplicateTrackingNumber } = useApp();
+  const {
+    documents, addDocument, updateDocument, deleteDocument, isDuplicateTrackingNumber,
+    remarksByDocument, remarksLoading, addDocumentRemark,
+    focusTarget, clearFocusTarget, personnelColorMap,
+  } = useApp();
 
   const [showForm,      setShowForm]      = useState(false);
   const [editId,        setEditId]        = useState(null);
@@ -72,9 +81,27 @@ export default function DocumentTracking() {
   const [saveErr,       setSaveErr]       = useState("");
   const [personnel,     setPersonnel]     = useState([]);
   const [trackingPrefix, setTrackingPrefix] = useState(getTrackingNumberPrefix());
-  const [remarkDrafts, setRemarkDrafts] = useState({});
+  const [highlightedDocId, setHighlightedDocId] = useState(null);
+  const [exporting,     setExporting]     = useState(false);
+  const [exportErr,     setExportErr]     = useState("");
 
   const PER_PAGE = 8;
+
+  useEffect(() => {
+    if (!focusTarget || focusTarget.entityType !== "document") return;
+    // The doc may be on another page of the paginated table; jumping to
+    // page 1 (where it's most likely to be if recently active) then
+    // scrolling is a reasonable best-effort without adding a dedicated
+    // "find this row's page" search across filters/sort.
+    const el = document.getElementById(`document-row-${focusTarget.entityId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    setHighlightedDocId(focusTarget.entityId);
+    const timeout = setTimeout(() => setHighlightedDocId(null), 3000);
+    clearFocusTarget();
+    return () => clearTimeout(timeout);
+  }, [focusTarget, clearFocusTarget]);
 
   useEffect(() => {
     let mounted = true;
@@ -122,16 +149,6 @@ export default function DocumentTracking() {
   const completed       = visibleDocuments.filter(d => d.status === "Completed").length;
   const recent          = [...visibleDocuments].sort((a, b) => (b.dateReceived > a.dateReceived ? 1 : -1)).slice(0, 3);
 
-  useEffect(() => {
-    setRemarkDrafts(prev => {
-      const next = {};
-      visibleDocuments.forEach(doc => {
-        next[doc.id] = prev[doc.id] ?? "";
-      });
-      return next;
-    });
-  }, [visibleDocuments]);
-
   const filtered = useMemo(() => {
     return visibleDocuments.filter(d => {
       const q = search.toLowerCase();
@@ -148,6 +165,21 @@ export default function DocumentTracking() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
+  // Exports every record matching the current search/status/direction
+  // filters — not just the current page's 8 rows, since pagination is a
+  // display convenience, not a filter the person intentionally set.
+  async function handleExport() {
+    setExporting(true);
+    setExportErr("");
+    try {
+      await exportDocumentTrackingToExcel(filtered, remarksByDocument);
+    } catch (err) {
+      setExportErr(err.message || "Failed to export to Excel.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   function openAdd() {
     setEditId(null); setForm(EMPTY_FORM); setErrors({}); setSaveErr(""); setShowForm(true);
   }
@@ -158,7 +190,7 @@ export default function DocumentTracking() {
       subject: doc.subject, dateReceived: doc.dateReceived, dateReleased: doc.dateReleased || "",
       originatingOffice: doc.originatingOffice, destinationOffice: doc.destinationOffice,
       currentOffice: doc.currentOffice, assignedPersonnel: doc.assignedPersonnel,
-      status: doc.status, remarks: doc.remarks,
+      status: doc.status, remarks: "",
     });
     setErrors({}); setSaveErr(""); setShowForm(true);
   }
@@ -184,8 +216,14 @@ export default function DocumentTracking() {
     if (!valid) return;
     setSaving(true); setSaveErr("");
     try {
-      if (editId) { await updateDocument(editId, form); }
-      else        { await addDocument(form); }
+      const initialRemark = (form.remarks || "").trim();
+      if (editId) {
+        await updateDocument(editId, form);
+        if (initialRemark) await addDocumentRemark(editId, initialRemark);
+      } else {
+        const createdId = await addDocument(form);
+        if (initialRemark && createdId) await addDocumentRemark(createdId, initialRemark);
+      }
       setShowForm(false); setPage(1);
     } catch (err) {
       setSaveErr(err.message || "Failed to save.");
@@ -207,20 +245,6 @@ export default function DocumentTracking() {
   async function handleStatusChange(id, status) {
     try {
       await updateDocument(id, { status });
-    } catch (err) {
-      alert("Error: " + err.message);
-    }
-  }
-
-  function handleRemarksDraft(id, value) {
-    setRemarkDrafts(prev => ({ ...prev, [id]: value }));
-  }
-
-  async function handleRemarksSubmit(id) {
-    try {
-      const value = (remarkDrafts[id] || "").trim();
-      await updateDocument(id, { remarks: value });
-      setRemarkDrafts(prev => ({ ...prev, [id]: "" }));
     } catch (err) {
       alert("Error: " + err.message);
     }
@@ -348,9 +372,18 @@ export default function DocumentTracking() {
                     className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 outline-none focus:border-teal-400 bg-white">
                     <option value="">Select person</option>
                     {personnel.map(p => (
-                      <option key={p.id} value={p.name}>{p.name}</option>
+                      <option
+                        key={p.id}
+                        value={p.name}
+                        style={getPersonnelOptionStyle(personnelColorMap?.[p.name.trim().toLowerCase()])}
+                      >
+                        {p.name}
+                      </option>
                     ))}
                   </select>
+                  {form.assignedPersonnel && (
+                    <div className="mt-2"><PersonnelChip name={form.assignedPersonnel} size="xs" /></div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
@@ -367,7 +400,7 @@ export default function DocumentTracking() {
                   </select>
                 </div>
                 <div className="sm:col-span-2 lg:col-span-3">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Remarks</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Remarks {editId ? "(adds a new remark to the history)" : "(optional first remark)"}</label>
                   <textarea
                     value={form.remarks}
                     onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))}
@@ -429,8 +462,8 @@ export default function DocumentTracking() {
                           <p className="text-xs text-slate-600 mt-0.5">
                             {fromOffice ? `${fromOffice} → ${toOffice || "—"}` : (toOffice || "—")}
                           </p>
-                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
-                            {h.assignedPersonnel && <span>Assigned: <span className="text-slate-700 font-medium">{h.assignedPersonnel}</span></span>}
+                          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                            {h.assignedPersonnel && <span className="flex items-center gap-1.5">Assigned: <PersonnelChip name={h.assignedPersonnel} size="xs" /></span>}
                             {h.status && <span>Status: <span className="text-slate-700 font-medium">{h.status}</span></span>}
                           </div>
                           {h.remarks && (
@@ -477,8 +510,22 @@ export default function DocumentTracking() {
                   <option value="All">All Status</option>
                   {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
                 </select>
+                <button
+                  onClick={handleExport}
+                  disabled={exporting || filtered.length === 0}
+                  title="Export the filtered records shown below to an Excel file"
+                  className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <FaFileExcel className="text-status-green" />
+                  {exporting ? "Exporting…" : "Export to Excel"}
+                </button>
               </div>
             </div>
+            {exportErr && (
+              <div className="px-5 py-2 border-b border-slate-100 bg-status-redBg text-status-red text-xs">
+                {exportErr}
+              </div>
+            )}
 
             {/* Scrollable table */}
             <div className="overflow-x-auto">
@@ -497,7 +544,7 @@ export default function DocumentTracking() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {paged.map(doc => (
-                    <tr key={doc.id} className="hover:bg-slate-50 transition-colors group">
+                    <tr key={doc.id} id={`document-row-${doc.id}`} className={`hover:bg-slate-50 transition-colors group ${highlightedDocId === doc.id ? "bg-teal-50/60 ring-2 ring-inset ring-teal-400" : ""}`}>
                       <td className="py-3 px-4">
                         <span className="text-xs font-mono text-navy-700 bg-navy-50 px-2 py-0.5 rounded">{doc.trackingNumber}</span>
                       </td>
@@ -517,7 +564,9 @@ export default function DocumentTracking() {
                       </td>
                       <td className="py-3 px-4">
                         <p className="text-sm text-navy-900">{doc.currentOffice}</p>
-                        <p className="text-xs text-slate-500">Assigned: {doc.assignedPersonnel || "—"}</p>
+                        <div className="mt-1">
+                          {doc.assignedPersonnel ? <PersonnelChip name={doc.assignedPersonnel} size="xs" /> : <span className="text-xs text-slate-500">Assigned: —</span>}
+                        </div>
                       </td>
                       <td className="py-3 px-4 text-sm text-slate-600">{doc.dateReceived}</td>
                       <td className="py-3 px-4">
@@ -530,32 +579,14 @@ export default function DocumentTracking() {
                           {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
                         </select>
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={remarkDrafts[doc.id] ?? ""}
-                              onChange={(e) => handleRemarksDraft(doc.id, e.target.value)}
-                              placeholder={canUpdateDocument(doc) ? "Add remark" : "Remarks are read-only"}
-                              disabled={!canUpdateDocument(doc)}
-                              className="w-full min-w-[180px] px-2 py-1.5 text-sm rounded border border-slate-200 bg-white disabled:cursor-not-allowed disabled:bg-slate-100"
-                            />
-                            <button
-                              onClick={() => handleRemarksSubmit(doc.id)}
-                              disabled={!canUpdateDocument(doc)}
-                              className="px-2.5 py-1.5 text-xs font-medium rounded bg-navy-900 text-white hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              Submit
-                            </button>
-                          </div>
-                          <div className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-2">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Remarks</p>
-                            <p className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">
-                              {(doc.remarks || "").trim() ? doc.remarks : "No remarks yet."}
-                            </p>
-                          </div>
-                        </div>
+                      <td className="py-3 px-4 min-w-[220px]">
+                        <RemarksThread
+                          remarks={remarksByDocument[doc.id] || []}
+                          loading={remarksLoading.documents}
+                          onAdd={canUpdateDocument(doc) ? (content) => addDocumentRemark(doc.id, content) : undefined}
+                          autoScrollToLatest={highlightedDocId === doc.id}
+                          compact
+                        />
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-end gap-1">

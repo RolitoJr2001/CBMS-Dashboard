@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { FaPlus, FaEdit, FaTrash, FaTimes, FaCheck, FaSpinner } from "react-icons/fa";
 import { useApp } from "../context/AppContext";
 import { fetchProfiles } from "../services/authService";
+import PersonnelChip from "./PersonnelChip";
+import { getPersonnelOptionStyle } from "../utils/personnelColors";
 
 const typeColors = {
   Deadline: "bg-[#fce8e6] text-[#c5221f] border-[#f4c7c3]",
@@ -35,18 +37,8 @@ function formatEventDateRange(date, endDate) {
   return sameMonth ? `${start.mo} ${start.day}–${end.day}` : `${start.mo} ${start.day} – ${end.mo} ${end.day}`;
 }
 
-function formatAssignedPersonnel(value) {
-  if (Array.isArray(value)) {
-    return value.filter(Boolean).join(", ");
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-  return "";
-}
-
 export default function CalendarCard() {
-  const { upcomingEvents, embedUrl, addEvent, updateEvent, deleteEvent, user } = useApp();
+  const { upcomingEvents, embedUrl, addEvent, updateEvent, deleteEvent, user, focusTarget, clearFocusTarget, personnelColorMap } = useApp();
   const isAdmin = user?.role === "admin";
   const [showForm, setShowForm] = useState(false);
   const [editId,   setEditId]   = useState(null);
@@ -56,6 +48,19 @@ export default function CalendarCard() {
   const [saveErr,  setSaveErr]  = useState("");
   const [personnel, setPersonnel] = useState([]);
   const [selectedPersonnelName, setSelectedPersonnelName] = useState("");
+  const [highlightedEventId, setHighlightedEventId] = useState(null);
+
+  useEffect(() => {
+    if (!focusTarget || focusTarget.entityType !== "event") return;
+    const el = document.getElementById(`event-row-${focusTarget.entityId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    setHighlightedEventId(focusTarget.entityId);
+    const timeout = setTimeout(() => setHighlightedEventId(null), 3000);
+    clearFocusTarget();
+    return () => clearTimeout(timeout);
+  }, [focusTarget, clearFocusTarget]);
 
   useEffect(() => {
     let mounted = true;
@@ -202,7 +207,13 @@ export default function CalendarCard() {
                     {personnel
                       .filter(p => !form.assignedPersonnel.includes(p.name))
                       .map(p => (
-                        <option key={p.id} value={p.name}>{p.name}</option>
+                        <option
+                          key={p.id}
+                          value={p.name}
+                          style={getPersonnelOptionStyle(personnelColorMap?.[p.name.trim().toLowerCase()])}
+                        >
+                          {p.name}
+                        </option>
                       ))}
                   </select>
                   <button
@@ -225,16 +236,11 @@ export default function CalendarCard() {
                 {form.assignedPersonnel.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {form.assignedPersonnel.map(person => (
-                      <span key={person} className="inline-flex items-center gap-2 rounded-full bg-teal-100 text-teal-800 px-3 py-1 text-xs font-medium shadow-sm">
-                        {person}
-                        <button
-                          type="button"
-                          onClick={() => setForm(f => ({ ...f, assignedPersonnel: f.assignedPersonnel.filter(item => item !== person) }))}
-                          className="text-teal-700 hover:text-teal-900"
-                        >
-                          <FaTimes className="text-[10px]" />
-                        </button>
-                      </span>
+                      <PersonnelChip
+                        key={person}
+                        name={person}
+                        onRemove={() => setForm(f => ({ ...f, assignedPersonnel: f.assignedPersonnel.filter(item => item !== person) }))}
+                      />
                     ))}
                   </div>
                 )}
@@ -265,7 +271,7 @@ export default function CalendarCard() {
               const { mo, day } = fmtDate(ev.date);
               const isMultiDay = ev.endDate && ev.endDate !== ev.date;
               return (
-                <li key={ev.id} className="flex items-center gap-3 py-2.5 group">
+                <li key={ev.id} id={`event-row-${ev.id}`} className={`flex items-center gap-3 py-2.5 group rounded-lg transition-colors ${highlightedEventId === ev.id ? "bg-teal-50/70 ring-2 ring-teal-400 px-2" : ""}`}>
                   <div className="flex flex-col items-center justify-center w-10 h-10 rounded-lg bg-navy-900 text-white shrink-0 px-1 text-center">
                     <span className="text-[9px] uppercase leading-none opacity-70">{mo}</span>
                     <span className={`font-bold leading-none ${isMultiDay ? "text-[10px]" : "text-sm"}`}>
@@ -277,9 +283,15 @@ export default function CalendarCard() {
                     <p className="text-xs text-slate-400">
                       {isMultiDay ? `${formatEventDateRange(ev.date, ev.endDate)} · ` : ""}
                       {ev.time}
-                      {formatAssignedPersonnel(ev.assignedPersonnel) ? ` · Assigned to ${formatAssignedPersonnel(ev.assignedPersonnel)}` : ""}
                       {ev.description ? ` · ${ev.description}` : ""}
                     </p>
+                    {Array.isArray(ev.assignedPersonnel) && ev.assignedPersonnel.filter(Boolean).length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {ev.assignedPersonnel.filter(Boolean).map(person => (
+                          <PersonnelChip key={person} name={person} size="xs" />
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap border ${typeColors[ev.type] || "bg-slate-100 text-slate-600 border-slate-200"}`}>
                     {ev.type}

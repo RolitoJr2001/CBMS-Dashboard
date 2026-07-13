@@ -6,9 +6,13 @@ import { useApp } from "../context/AppContext";
 export default function QuickLinks() {
   const { user } = useApp();
   const isAdmin = user?.role === "admin";
+  // Viewers get every shortcut except Analytics, which is an admin-only
+  // page (Sidebar/Dashboard don't route viewers there). Quick Links
+  // themselves stay visible for everyone — only the destination is
+  // permission-gated, per the Viewer role's access.
   const allowedQuickLinks = isAdmin
     ? quickLinks
-    : quickLinks.filter(link => ["dashboard", "calendar", "checklist", "monitoring", "announcements"].includes(link.id));
+    : quickLinks.filter(link => link.href !== "#analytics");
   function handleClick(e, link) {
     if (!link.external && link.href.startsWith("#")) {
       e.preventDefault();
