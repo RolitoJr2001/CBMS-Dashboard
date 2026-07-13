@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { MdNotifications, MdSearch, MdShield } from "react-icons/md";
 import { useApp } from "../context/AppContext";
+import PersonnelChip from "./PersonnelChip";
 
 // Search keyword → tab id mapping
 const SEARCH_MAP = {
@@ -51,6 +52,7 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
     markNotificationRead,
     markAllNotificationsRead,
     deleteNotification,
+    openNotification,
   } = useApp();
   const isAdmin = user?.role === "admin";
   const currentRole = isAdmin ? "admin" : "viewer";
@@ -211,11 +213,29 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
                       <button
                         type="button"
                         className="min-w-0 flex-1 text-left"
-                        onClick={() => markNotificationRead(item.id)}
+                        onClick={() => {
+                          // Clicking a notification opens the related task/
+                          // document/schedule item and jumps straight to it
+                          // (and, for remarks, scrolls to the newest message)
+                          // instead of only marking it read.
+                          if (item.raw) {
+                            const page = openNotification(item.raw);
+                            if (page && onNavigate) {
+                              onNavigate(page);
+                              setNotifOpen(false);
+                            }
+                          } else {
+                            markNotificationRead(item.id);
+                          }
+                        }}
                       >
                         <p className={`text-xs font-semibold mb-0.5 ${item.accent}`}>{item.badge}</p>
                         <p className="text-sm text-navy-900">{item.title}</p>
-                        {item.actor && <p className="text-[11px] text-slate-500 mt-1">{item.actor}</p>}
+                        {item.raw?.actorName && (
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <PersonnelChip name={item.raw.actorName} role={item.actorRole} size="xs" />
+                          </div>
+                        )}
                         <p className="text-xs text-slate-400 mt-1">{item.message}</p>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
                           <span className="rounded-full bg-slate-100 px-2 py-0.5">{item.category}</span>

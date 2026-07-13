@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { MdGroup, MdAdd, MdDelete, MdEdit, MdCheck, MdClose, MdLink, MdLinkOff, MdRefresh } from "react-icons/md";
 import { fetchProfiles } from "../services/authService";
+import PersonnelChip from "./PersonnelChip";
+import ColorPicker from "./ColorPicker";
+import { useApp } from "../context/AppContext";
 import {
   fetchPersonnel,
   insertPersonnel,
@@ -24,6 +27,7 @@ function findLinkedPersonnel(profile, personnelList) {
 }
 
 export default function PersonnelManager() {
+  const { updatePersonnelColor } = useApp();
   const [profiles, setProfiles] = useState([]);
   const [personnel, setPersonnel] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -116,6 +120,11 @@ export default function PersonnelManager() {
     }
   }
 
+  async function handleColorChange(personnelRow, hex) {
+    const updated = await updatePersonnelColor(personnelRow.id, hex);
+    setPersonnel(prev => prev.map(p => p.id === personnelRow.id ? updated : p));
+  }
+
   function startEdit(personnelRow) {
     setEditId(personnelRow.id);
     setEditValue(personnelRow.name);
@@ -184,12 +193,17 @@ export default function PersonnelManager() {
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-navy-900 truncate">{profile.name || "(no name set)"}</p>
                   <p className="text-xs text-slate-400 truncate">@{profile.username || "unknown"}</p>
+                  <div className="mt-1.5"><PersonnelChip name={profile.name || profile.username} role={profile.role} size="xs" /></div>
                 </div>
                 {linked ? (
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-status-greenBg text-status-green">
                       <MdLink className="text-sm" /> Linked as "{linked.name}"
                     </span>
+                    <ColorPicker
+                      value={linked.color}
+                      onChange={(hex) => handleColorChange(linked, hex)}
+                    />
                     <button
                       onClick={() => handleUnlink(linked)}
                       disabled={isBusy}
@@ -266,11 +280,16 @@ export default function PersonnelManager() {
                 <>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-navy-900 truncate">{p.name}</p>
+                    <div className="mt-1 mb-1"><PersonnelChip name={p.name} size="xs" /></div>
                     <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400">
                       <MdLinkOff className="text-sm" /> No linked account — notifications won't reach this name
                     </span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <ColorPicker
+                      value={p.color}
+                      onChange={(hex) => handleColorChange(p, hex)}
+                    />
                     <button
                       onClick={() => startEdit(p)}
                       className="inline-flex items-center justify-center rounded-full p-2 bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"

@@ -20,6 +20,7 @@ import Announcements    from "../components/Announcements";
 import DocumentTracking from "../components/DocumentTracking";
 import TaskPanel        from "../components/TaskPanel";
 import PersonnelManager from "../components/PersonnelManager";
+import PersonnelChip    from "../components/PersonnelChip";
 import TopBar           from "../components/TopBar";
 import Sidebar          from "../components/Sidebar";
 
@@ -233,6 +234,7 @@ function DashboardHome({ setActivePage, requirements, events, upcomingEvents, do
                   <p className="text-sm font-medium text-navy-900 truncate">{doc.title}</p>
                   <p className="text-xs text-slate-400">{doc.trackingNumber} · {doc.dateReceived}</p>
                 </div>
+                {doc.assignedPersonnel && <PersonnelChip name={doc.assignedPersonnel} size="xs" />}
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
                   doc.status === "Completed"  ? "bg-status-greenBg text-status-green" :
                   doc.status === "In Process" ? "bg-status-yellowBg text-status-yellow" :
@@ -278,6 +280,16 @@ function DashboardHome({ setActivePage, requirements, events, upcomingEvents, do
                     <p className="text-sm font-medium text-navy-900 truncate">{ev.title}</p>
                     <p className="text-xs text-slate-400">{ev.time}</p>
                   </div>
+                  {Array.isArray(ev.assignedPersonnel) && ev.assignedPersonnel.filter(Boolean).length > 0 && (
+                    <div className="hidden sm:flex items-center gap-1 shrink-0">
+                      {ev.assignedPersonnel.filter(Boolean).slice(0, 2).map(person => (
+                        <PersonnelChip key={person} name={person} size="xs" />
+                      ))}
+                      {ev.assignedPersonnel.filter(Boolean).length > 2 && (
+                        <span className="text-[10px] text-slate-400">+{ev.assignedPersonnel.filter(Boolean).length - 2}</span>
+                      )}
+                    </div>
+                  )}
                   <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
                     ev.type === "Deadline" ? "bg-status-redBg text-status-red" :
                     ev.type === "Meeting"  ? "bg-teal-50 text-teal-700" :

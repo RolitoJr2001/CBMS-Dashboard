@@ -36,6 +36,16 @@ import {
 } from "../services/tasksService";
 import { supabase } from "../lib/supabase";
 import {
+  fetchRemarksForEntities,
+  addRemark as addRemarkEntry,
+  subscribeToRemarks,
+} from "../services/remarksService";
+import {
+  fetchPersonnel,
+  updatePersonnelColor as updatePersonnelColorEntry,
+  subscribeToPersonnel,
+} from "../services/personnelService";
+import {
   fetchNotifications,
   createNotificationForRecipients,
   createNotificationsForAdmins,
@@ -50,7 +60,7 @@ import {
   subscribeToNotifications,
 } from "../services/notificationService";
 
-const AppContext = createContext(null);
+export const AppContext = createContext(null);
 
 // assigned_to is stored in the DB as a JSON-encoded string (see
 // serializeAssignedTo in tasksService.js). The initial fetch path
@@ -103,6 +113,22 @@ export function AppProvider({ children }) {
   const [documents,    setDocuments]    = useState([]);
   const [tasks,         setTasks]         = useState([]);
   const [notifications, setNotifications] = useState([]);
+  // Chat-style remarks history, keyed by entity id. Loaded in bulk
+  // whenever the tasks/documents list changes so every card/row can
+  // render its thread without an extra request each.
+  const [remarksByTask,     setRemarksByTask]     = useState({});
+  const [remarksByDocument, setRemarksByDocument] = useState({});
+  const [remarksLoading, setRemarksLoading] = useState({ tasks: false, documents: false });
+  // Personnel + their admin-customizable colors. Loaded once and kept in
+  // sync live via the "personnel-realtime" channel, so a color change
+  // (or rename/add/remove) shows up immediately everywhere a
+  // <PersonnelChip> is rendered, with no page refresh.
+  const [personnel, setPersonnel] = useState([]);
+  // Clicking a notification navigates to its related task/document/event
+  // and asks that section to scroll to + highlight the relevant item (and,
+  // for remarks, the newest message). Consumers (TaskPanel, DocumentTracking,
+  // CalendarCard) watch this and clear it once they've handled it.
+  const [focusTarget, setFocusTarget] = useState(null);
   // Set when an assignment can't be matched to a viewer account, so the
   // admin sees why a notification didn't go out instead of it failing
   // silently (see notifyAssignmentToRecipients below).
@@ -118,6 +144,28 @@ export function AppProvider({ children }) {
   useEffect(() => { userRef.current = user; }, [user]);
 
   const embedUrl = calendarEmbedUrl;
+
+  // name (lowercased) -> hex color, built from the personnel table. Read
+  // by PersonnelChip via AppContext so every chip anywhere in the app
+  // reflects the Administrator's custom color choice, if one is set.
+  const personnelColorMap = personnel.reduce((acc, p) => {
+    if (p?.name && p?.color) acc[String(p.name).trim().toLowerCase()] = p.color;
+    return acc;
+  }, {});
+
+  const loadPersonnel = useCallback(async () => {
+    try {
+      setPersonnel(await fetchPersonnel());
+    } catch (error) {
+      console.error("Failed loading personnel", error);
+    }
+  }, []);
+
+  const updatePersonnelColor = useCallback(async (id, color) => {
+    const updated = await updatePersonnelColorEntry(id, color);
+    setPersonnel(prev => prev.map(p => p.id === id ? updated : p));
+    return updated;
+  }, []);
 
   const suppressNextRealtimeNotification = useCallback(() => {
     suppressRealtimeNotificationRef.current = true;
@@ -292,6 +340,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (!user) return;
     loadAll();
+    loadPersonnel();
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -336,9 +385,81 @@ export function AppProvider({ children }) {
       }
     });
 
+    // Schedule & Events: live INSERT/UPDATE/DELETE sync. calendar_events
+    // rows are simple enough to refetch-on-change (rather than hand-merge
+    // the JSON-encoded assigned_personnel column) without meaningfully
+    // affecting perceived latency.
+    const eventsChannel = supabase
+      .channel("events-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "calendar_events" },
+        () => loadEvents()
+      )
+      .subscribe();
+
+    // Document assignments/tracking updates: same refetch-on-change
+    // approach, since documents are loaded together with their joined
+    // document_history rows (see documentsService.fetchDocuments).
+    const documentsChannel = supabase
+      .channel("documents-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "documents" },
+        () => loadDocuments()
+      )
+      .subscribe();
+
+    const requirementsChannel = supabase
+      .channel("requirements-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "requirements" },
+        () => loadRequirements()
+      )
+      .subscribe();
+
+    // Real-Time Remarks (chat-style): a remark posted by anyone appears
+    // instantly for every other user currently viewing that task/document,
+    // without a page refresh. Dedupe against remarks this same tab already
+    // appended optimistically in addTaskRemark/addDocumentRemark.
+    const remarksChannel = subscribeToRemarks((remark) => {
+      if (remark.entityType === "task") {
+        setRemarksByTask(prev => {
+          const existing = prev[remark.entityId] || [];
+          if (existing.some(r => r.id === remark.id)) return prev;
+          return { ...prev, [remark.entityId]: [...existing, remark] };
+        });
+      } else if (remark.entityType === "document") {
+        setRemarksByDocument(prev => {
+          const existing = prev[remark.entityId] || [];
+          if (existing.some(r => r.id === remark.id)) return prev;
+          return { ...prev, [remark.entityId]: [...existing, remark] };
+        });
+      }
+    });
+
+    // Personnel Color Chips: an Administrator's color change (or a
+    // rename/add/remove) reflects immediately in every chip anywhere in
+    // the app for every connected user.
+    const personnelChannel = subscribeToPersonnel((eventType, row, oldRow) => {
+      if (eventType === "INSERT") {
+        setPersonnel(prev => [...prev, row].sort((a, b) => a.name.localeCompare(b.name)));
+      } else if (eventType === "UPDATE") {
+        setPersonnel(prev => prev.map(p => p.id === row.id ? row : p));
+      } else if (eventType === "DELETE") {
+        setPersonnel(prev => prev.filter(p => p.id !== oldRow.id));
+      }
+    });
+
     return () => {
       supabase.removeChannel(tasksChannel);
       supabase.removeChannel(notificationsChannel);
+      supabase.removeChannel(eventsChannel);
+      supabase.removeChannel(documentsChannel);
+      supabase.removeChannel(requirementsChannel);
+      supabase.removeChannel(remarksChannel);
+      supabase.removeChannel(personnelChannel);
     };
   }, [user?.id]);
 
@@ -376,8 +497,10 @@ export function AppProvider({ children }) {
   async function loadDocuments() {
     setLoading(p => ({ ...p, documents: true }));
     try {
-      setDocuments(await fetchDocuments(user));
+      const docs = await fetchDocuments(user);
+      setDocuments(docs);
       setErrors(p => ({ ...p, documents: null }));
+      loadDocumentRemarks(docs.map(d => d.id));
     } catch (e) {
       setErrors(p => ({ ...p, documents: e.message }));
     } finally {
@@ -388,14 +511,42 @@ export function AppProvider({ children }) {
   async function loadTasks() {
     setLoading(p => ({ ...p, tasks: true }));
     try {
-      setTasks(await fetchTasks(user));
+      const rows = await fetchTasks(user);
+      setTasks(rows);
       setErrors(p => ({ ...p, tasks: null }));
+      loadTaskRemarks(rows.map(t => t.id));
     } catch (e) {
       setErrors(p => ({ ...p, tasks: e.message }));
     } finally {
       setLoading(p => ({ ...p, tasks: false }));
     }
   }
+
+  // ── Remarks history (chat-style) ────────────────────────────
+  async function loadTaskRemarks(taskIds) {
+    setRemarksLoading(p => ({ ...p, tasks: true }));
+    try {
+      const grouped = await fetchRemarksForEntities("task", taskIds);
+      setRemarksByTask(grouped);
+    } catch (e) {
+      console.error("Failed to load task remarks", e);
+    } finally {
+      setRemarksLoading(p => ({ ...p, tasks: false }));
+    }
+  }
+
+  async function loadDocumentRemarks(documentIds) {
+    setRemarksLoading(p => ({ ...p, documents: true }));
+    try {
+      const grouped = await fetchRemarksForEntities("document", documentIds);
+      setRemarksByDocument(grouped);
+    } catch (e) {
+      console.error("Failed to load document remarks", e);
+    } finally {
+      setRemarksLoading(p => ({ ...p, documents: false }));
+    }
+  }
+
 
   // ── Auth ─────────────────────────────────────────────────
   // login() takes a username (not an email) and password. authSignIn
@@ -415,6 +566,8 @@ export function AppProvider({ children }) {
     setDocuments([]);
     setTasks([]);
     setNotifications([]);
+    setRemarksByTask({});
+    setRemarksByDocument({});
   }, []);
 
   const handleMarkNotificationRead = useCallback(async (id) => {
@@ -840,6 +993,95 @@ export function AppProvider({ children }) {
     return await checkDuplicateTracking(num, excludeId);
   }, []);
 
+  const addTaskRemark = useCallback(async (taskId, content) => {
+    const actor = userRef.current;
+    const authorName = actor?.name || actor?.username || "Unknown";
+    const created = await addRemarkEntry({
+      entityType: "task",
+      entityId: taskId,
+      content,
+      authorId: actor?.id || null,
+      authorName,
+    });
+    setRemarksByTask(prev => ({
+      ...prev,
+      [taskId]: [...(prev[taskId] || []), created],
+    }));
+
+    const relatedTask = tasks.find(t => t.id === taskId);
+    const metadata = {
+      itemTitle: relatedTask?.title || "this task",
+      entityName: relatedTask?.title || "this task",
+      remarks: content,
+    };
+
+    // Real-Time Remarks Notifications: a Viewer's remark notifies the
+    // Admin(s); an Admin's remark notifies the Viewer(s) the task is
+    // assigned to. (Falls back to notifying admins if the task has no
+    // resolvable assignee, e.g. it's assigned to a name with no linked
+    // viewer account, so the update isn't silently dropped.)
+    const actorIsAdmin = String(actor?.role || "viewer").toLowerCase() === "admin";
+    if (actorIsAdmin) {
+      const notified = await notifyAssignmentToRecipients(relatedTask?.assignedTo, {
+        action: "task_remarks_updated",
+        section: "Tasks",
+        type: "activity",
+        entityType: "task",
+        entityId: taskId,
+        metadata,
+      });
+      if (!notified.length) {
+        await notify({ recipients: "admins", action: "task_remarks_updated", section: "Tasks", type: "activity", entityType: "task", entityId: taskId, metadata });
+      }
+    } else {
+      await notify({ recipients: "admins", action: "task_remarks_updated", section: "Tasks", type: "activity", entityType: "task", entityId: taskId, metadata });
+    }
+
+    return created;
+  }, [notify, notifyAssignmentToRecipients, tasks]);
+
+  const addDocumentRemark = useCallback(async (documentId, content) => {
+    const actor = userRef.current;
+    const authorName = actor?.name || actor?.username || "Unknown";
+    const created = await addRemarkEntry({
+      entityType: "document",
+      entityId: documentId,
+      content,
+      authorId: actor?.id || null,
+      authorName,
+    });
+    setRemarksByDocument(prev => ({
+      ...prev,
+      [documentId]: [...(prev[documentId] || []), created],
+    }));
+
+    const relatedDoc = documents.find(d => d.id === documentId);
+    const metadata = {
+      itemTitle: relatedDoc?.title || "this document",
+      entityName: relatedDoc?.title || "this document",
+      trackingNumber: relatedDoc?.trackingNumber || null,
+    };
+
+    const actorIsAdmin = String(actor?.role || "viewer").toLowerCase() === "admin";
+    if (actorIsAdmin) {
+      const notified = await notifyAssignmentToRecipients(relatedDoc?.assignedPersonnel, {
+        action: "document_tracking_updated",
+        section: "Document Tracking",
+        type: "activity",
+        entityType: "document",
+        entityId: documentId,
+        metadata,
+      });
+      if (!notified.length) {
+        await notify({ recipients: "admins", action: "document_tracking_updated", section: "Document Tracking", type: "activity", entityType: "document", entityId: documentId, metadata });
+      }
+    } else {
+      await notify({ recipients: "admins", action: "document_tracking_updated", section: "Document Tracking", type: "activity", entityType: "document", entityId: documentId, metadata });
+    }
+
+    return created;
+  }, [documents, notify, notifyAssignmentToRecipients]);
+
   const addTask = useCallback(async (task) => {
     suppressNextRealtimeNotification();
     const created = await insertTask(task, userRef.current?.id, userRef.current?.username || userRef.current?.name || "admin");
@@ -950,6 +1192,32 @@ export function AppProvider({ children }) {
     });
   }, [pushNotification]);
 
+  // Maps a notification's section to the Dashboard tab id that shows it,
+  // so clicking a notification can jump straight to the right screen.
+  const SECTION_TO_PAGE = {
+    "Tasks": "tasks",
+    "Document Tracking": "document-tracking",
+    "Schedule & Events": "calendar",
+    "Requirements": "checklist",
+  };
+
+  // Clicking a notification: mark it read, then set a focus target that
+  // the destination section (TaskPanel / DocumentTracking / CalendarCard)
+  // picks up to scroll to + highlight that item — and, for remarks,
+  // scroll straight to the newest message in the thread.
+  const openNotification = useCallback((item) => {
+    if (item?.id && !item.read) {
+      handleMarkNotificationRead(item.id);
+    }
+    const page = SECTION_TO_PAGE[item?.section];
+    if (page && item?.entityId) {
+      setFocusTarget({ page, entityType: item.entityType, entityId: item.entityId, ts: Date.now() });
+    }
+    return page || null;
+  }, [handleMarkNotificationRead]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const clearFocusTarget = useCallback(() => setFocusTarget(null), []);
+
   return (
     <AppContext.Provider value={{
       // auth
@@ -963,6 +1231,11 @@ export function AppProvider({ children }) {
       documents, addDocument, updateDocument, deleteDocument, isDuplicateTrackingNumber,
       // tasks
       tasks, addTask, updateTask, deleteTask,
+      // remarks history (chat-style)
+      remarksByTask, remarksByDocument, remarksLoading,
+      addTaskRemark, addDocumentRemark,
+      // personnel + customizable colors
+      personnel, personnelColorMap, loadPersonnel, updatePersonnelColor,
       // notifications
       notifications, pushNotification, notify,
       notificationWarning,
@@ -971,6 +1244,7 @@ export function AppProvider({ children }) {
       markAllNotificationsRead: handleMarkAllNotificationsRead,
       deleteNotification: handleDeleteNotification,
       deleteAllReadNotifications: handleDeleteAllReadNotifications,
+      openNotification, focusTarget, clearFocusTarget,
       // loading / error states
       loading, errors, reload: loadAll,
     }}>
