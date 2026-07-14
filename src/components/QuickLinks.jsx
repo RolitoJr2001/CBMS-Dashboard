@@ -3,7 +3,7 @@ import { quickLinks } from "../data/quickLinks";
 import { FaExternalLinkAlt } from "react-icons/fa";
 import { useApp } from "../context/AppContext";
 
-export default function QuickLinks() {
+export default function QuickLinks({ onNavigate }) {
   const { user } = useApp();
   const isAdmin = user?.role === "admin";
   // Viewers get every shortcut except Analytics, which is an admin-only
@@ -16,7 +16,12 @@ export default function QuickLinks() {
   function handleClick(e, link) {
     if (!link.external && link.href.startsWith("#")) {
       e.preventDefault();
-      const el = document.getElementById(link.href.slice(1));
+      const pageId = link.href.slice(1);
+      if (onNavigate) {
+        onNavigate(pageId);
+        return;
+      }
+      const el = document.getElementById(pageId);
       if (el) el.scrollIntoView({ behavior: "smooth" });
     }
   }

@@ -317,7 +317,7 @@ export default function Dashboard() {
   const initialPage = isAdmin ? "dashboard" : "document-tracking";
   const [activePage, setActivePage] = useState(initialPage);
 
-  const viewerPages = ["dashboard", "calendar", "checklist", "monitoring", "document-tracking", "announcements", "tasks"];
+  const viewerPages = ["dashboard", "calendar", "checklist", "monitoring", "document-tracking", "quick-access", "announcements", "tasks"];
   const allowedPages = isAdmin ? Object.keys(PAGE_META) : viewerPages;
   const safeActivePage = allowedPages.includes(activePage) ? activePage : "document-tracking";
   const meta = PAGE_META[safeActivePage] || PAGE_META.dashboard;
@@ -371,7 +371,7 @@ export default function Dashboard() {
         return (
           <>
             <SectionHeader icon={MdLink} title="Quick Links" sub="Jump straight to the tools you use most" />
-            <QuickLinks />
+            <QuickLinks onNavigate={setActivePage} />
           </>
         );
 

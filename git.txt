@@ -1,6 +1,6 @@
 git add .
 
-git commit -m "update Vercel routing for password reset page" 
+git commit -m "update the color personnel and time format-1 v1.0.3-rmi" 
 
 git push origin main
 
