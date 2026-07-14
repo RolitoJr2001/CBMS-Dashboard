@@ -23,6 +23,7 @@ import PersonnelManager from "../components/PersonnelManager";
 import PersonnelChip    from "../components/PersonnelChip";
 import TopBar           from "../components/TopBar";
 import Sidebar          from "../components/Sidebar";
+import { formatDisplayTime } from "../utils/formatters";
 
 // ─── Constants ───────────────────────────────────────────────
 const STATUS_COLORS = {
@@ -278,7 +279,7 @@ function DashboardHome({ setActivePage, requirements, events, upcomingEvents, do
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-navy-900 truncate">{ev.title}</p>
-                    <p className="text-xs text-slate-400">{ev.time}</p>
+                    <p className="text-xs text-slate-400">{formatDisplayTime(ev.time)}</p>
                   </div>
                   {Array.isArray(ev.assignedPersonnel) && ev.assignedPersonnel.filter(Boolean).length > 0 && (
                     <div className="hidden sm:flex items-center gap-1 shrink-0">

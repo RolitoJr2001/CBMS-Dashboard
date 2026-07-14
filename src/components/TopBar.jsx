@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { MdNotifications, MdSearch, MdShield } from "react-icons/md";
 import { useApp } from "../context/AppContext";
 import PersonnelChip from "./PersonnelChip";
+import { formatDisplayDateTime, formatDisplayTime } from "../utils/formatters";
 
 // Search keyword → tab id mapping
 const SEARCH_MAP = {
@@ -16,14 +17,7 @@ const SEARCH_MAP = {
 };
 
 function formatNotificationTime(value) {
-  const date = value ? new Date(value) : new Date();
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
+  return formatDisplayDateTime(value);
 }
 
 function formatRelativeTime(value) {
@@ -100,7 +94,7 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
       id: `event-${ev.id}`,
       type: "event",
       title: ev.title,
-      message: `${ev.date} · ${ev.time}`,
+      message: `${ev.date} · ${formatDisplayTime(ev.time)}`,
       badge: "Upcoming Event",
       accent: "text-teal-700",
     })),

@@ -4,17 +4,10 @@ import PersonnelChip from "./PersonnelChip";
 import { getPersonnelColor } from "../utils/personnelColors";
 import { useContext } from "react";
 import { AppContext } from "../context/AppContext";
+import { formatDisplayDateTime } from "../utils/formatters";
 
 function formatTimestamp(value) {
-  if (!value) return "";
-  try {
-    return new Date(value).toLocaleString("en-US", {
-      month: "short", day: "numeric", year: "numeric",
-      hour: "numeric", minute: "2-digit",
-    });
-  } catch {
-    return "";
-  }
+  return formatDisplayDateTime(value);
 }
 
 function initialsFor(name) {

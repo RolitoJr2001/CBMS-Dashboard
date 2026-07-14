@@ -1,6 +1,7 @@
 import { FaRegCalendarAlt } from "react-icons/fa";
 import { useApp } from "../context/AppContext";
 import { priorityColors } from "../data/announcements";
+import { formatDisplayTime } from "../utils/formatters";
 
 const eventTypeStyles = {
   Deadline: { badge: "text-[#c5221f] bg-[#fce8e6]", card: "border-[#f4c7c3] bg-[#fff8f8]" },
@@ -27,7 +28,7 @@ export default function Announcements() {
     date: ev.date,
     category: ev.type,
     priority: ev.type === "Deadline" ? "High" : "Normal",
-    excerpt: ev.description || `Scheduled on ${formatDate(ev.date)} at ${ev.time}.`,
+    excerpt: ev.description || `Scheduled on ${formatDate(ev.date)} at ${formatDisplayTime(ev.time)}.`,
     source: "Schedule & Events",
   }));
 

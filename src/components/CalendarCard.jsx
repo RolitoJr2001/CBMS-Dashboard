@@ -4,6 +4,7 @@ import { useApp } from "../context/AppContext";
 import { fetchProfiles } from "../services/authService";
 import PersonnelChip from "./PersonnelChip";
 import { getPersonnelOptionStyle } from "../utils/personnelColors";
+import { formatDisplayTime } from "../utils/formatters";
 
 const typeColors = {
   Deadline: "bg-[#fce8e6] text-[#c5221f] border-[#f4c7c3]",
@@ -282,7 +283,7 @@ export default function CalendarCard() {
                     <p className="text-sm font-medium text-navy-900 truncate">{ev.title}</p>
                     <p className="text-xs text-slate-400">
                       {isMultiDay ? `${formatEventDateRange(ev.date, ev.endDate)} · ` : ""}
-                      {ev.time}
+                      {formatDisplayTime(ev.time)}
                       {ev.description ? ` · ${ev.description}` : ""}
                     </p>
                     {Array.isArray(ev.assignedPersonnel) && ev.assignedPersonnel.filter(Boolean).length > 0 && (

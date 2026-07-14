@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { calendarEmbedUrl } from "../data/calendar";
 import {
   signIn as authSignIn,
@@ -102,6 +102,39 @@ function fromDbTask(row) {
   };
 }
 
+function normalizeColorLookupValue(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function addColorAlias(map, value, color) {
+  const normalized = normalizeColorLookupValue(value);
+  if (!normalized || !color) return;
+  map[normalized] = color;
+  map[normalized.replace(/\s+/g, "")] = color;
+  map[normalized.replace(/[^a-z0-9]+/g, "")] = color;
+}
+
+function readStoredColorMap() {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem("cbms-personnel-colors");
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredColorMap(map) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem("cbms-personnel-colors", JSON.stringify(map));
+  } catch {
+    // ignore storage-write failures so the app still works
+  }
+}
+
 export function AppProvider({ children }) {
   // ── Auth state ────────────────────────────────────────────
   const [user, setUser]               = useState(null);
@@ -124,6 +157,7 @@ export function AppProvider({ children }) {
   // (or rename/add/remove) shows up immediately everywhere a
   // <PersonnelChip> is rendered, with no page refresh.
   const [personnel, setPersonnel] = useState([]);
+  const [profiles, setProfiles] = useState([]);
   // Clicking a notification navigates to its related task/document/event
   // and asks that section to scroll to + highlight the relevant item (and,
   // for remarks, the newest message). Consumers (TaskPanel, DocumentTracking,
@@ -145,13 +179,38 @@ export function AppProvider({ children }) {
 
   const embedUrl = calendarEmbedUrl;
 
-  // name (lowercased) -> hex color, built from the personnel table. Read
-  // by PersonnelChip via AppContext so every chip anywhere in the app
-  // reflects the Administrator's custom color choice, if one is set.
-  const personnelColorMap = personnel.reduce((acc, p) => {
-    if (p?.name && p?.color) acc[String(p.name).trim().toLowerCase()] = p.color;
-    return acc;
-  }, {});
+  // name (lowercased) -> hex color, built from the personnel table and
+  // the linked viewer profiles so the same color is honored for any
+  // displayed alias (name, username, full name, etc.).
+  const personnelColorMap = useMemo(() => {
+    const map = { ...readStoredColorMap() };
+
+    personnel.forEach((p) => {
+      if (!p?.name) return;
+      const color = p?.color || map[normalizeColorLookupValue(p.name)] || null;
+      if (!color) return;
+      addColorAlias(map, p.name, color);
+    });
+
+    (profiles || []).forEach((profile) => {
+      const profileValues = [profile?.name, profile?.username, profile?.full_name, profile?.fullName]
+        .map(normalizeColorLookupValue)
+        .filter(Boolean);
+      const linked = personnel.find((p) => {
+        const personnelValues = [p?.name]
+          .map(normalizeColorLookupValue)
+          .filter(Boolean);
+        return profileValues.some(value => personnelValues.includes(value)) || personnelValues.some(value => profileValues.includes(value));
+      });
+      const color = linked?.color || map[normalizeColorLookupValue(profile?.name)] || map[normalizeColorLookupValue(profile?.username)] || null;
+      if (!color) return;
+      [profile?.name, profile?.username, profile?.full_name, profile?.fullName, linked?.name].forEach((value) => {
+        addColorAlias(map, value, color);
+      });
+    });
+
+    return map;
+  }, [personnel, profiles]);
 
   const loadPersonnel = useCallback(async () => {
     try {
@@ -162,10 +221,29 @@ export function AppProvider({ children }) {
   }, []);
 
   const updatePersonnelColor = useCallback(async (id, color) => {
-    const updated = await updatePersonnelColorEntry(id, color);
-    setPersonnel(prev => prev.map(p => p.id === id ? updated : p));
+    let updated = null;
+    try {
+      updated = await updatePersonnelColorEntry(id, color);
+    } catch (error) {
+      updated = { id, name: personnel.find(p => p.id === id)?.name || "", color: color || null };
+    }
+
+    const nextPersonnel = (personnel || []).map(p => p.id === id ? { ...p, ...(updated || {}), color: updated?.color ?? p.color } : p);
+    setPersonnel(nextPersonnel);
+
+    if (updated?.name) {
+      const nextMap = { ...readStoredColorMap() };
+      addColorAlias(nextMap, updated.name, updated.color || null);
+      if (!updated.color) {
+        delete nextMap[normalizeColorLookupValue(updated.name)];
+        delete nextMap[normalizeColorLookupValue(updated.name).replace(/\s+/g, "")];
+        delete nextMap[normalizeColorLookupValue(updated.name).replace(/[^a-z0-9]+/g, "")];
+      }
+      writeStoredColorMap(nextMap);
+    }
+
     return updated;
-  }, []);
+  }, [personnel]);
 
   const suppressNextRealtimeNotification = useCallback(() => {
     suppressRealtimeNotificationRef.current = true;
@@ -316,7 +394,28 @@ export function AppProvider({ children }) {
     return () => sub?.unsubscribe();
   }, []);
 
-  // ── Load notifications once user is set ───────────────────
+  // ── Load profiles and notifications once user is set ─────
+  useEffect(() => {
+    if (!user?.id) {
+      setProfiles([]);
+      return;
+    }
+
+    let mounted = true;
+    async function loadProfiles() {
+      try {
+        const data = await fetchProfiles();
+        if (mounted) setProfiles(data || []);
+      } catch (error) {
+        console.error("Failed loading profiles", error);
+        if (mounted) setProfiles([]);
+      }
+    }
+
+    loadProfiles();
+    return () => { mounted = false; };
+  }, [user?.id]);
+
   useEffect(() => {
     if (!user?.id) return;
 

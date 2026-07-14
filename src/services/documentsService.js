@@ -61,7 +61,14 @@ function fromDb(row) {
           fromOffice:        h.from_office || null,
           toOffice:          h.to_office || h.office || null,
           timestamp: h.timestamp
-            ? new Date(h.timestamp).toLocaleString("sv-SE").replace("T", " ").slice(0, 16)
+            ? new Date(h.timestamp).toLocaleString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true,
+              })
             : "",
           action:            h.action,
           assignedPersonnel: h.assigned_personnel || null,
@@ -100,7 +107,14 @@ export async function fetchDocuments(user = null) {
         from_office: row.from_office,
         to_office: row.to_office,
         timestamp: row.timestamp
-          ? new Date(row.timestamp).toLocaleString("sv-SE").replace("T", " ").slice(0, 16)
+          ? new Date(row.timestamp).toLocaleString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            })
           : "",
         action: row.action,
         assigned_personnel: row.assigned_personnel,

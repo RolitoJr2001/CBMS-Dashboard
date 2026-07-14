@@ -5,6 +5,7 @@ import { useApp } from "../context/AppContext";
 import { sendPasswordReset } from "../services/authService";
 import cbmsLogo from "../../Logos/DASMO_OFFICIAL LOGO.png";
 
+const APP_INITIAL = "rmi";
 const APP_VERSION = "v1.0.3";
 
 export default function Login() {
@@ -145,7 +146,7 @@ export default function Login() {
       {/* Version - Bottom Right */}
       <div className="fixed bottom-4 right-4 text-right select-none">
         <p className="text-[11px] text-slate-300">
-          CBMS Dashboard {APP_VERSION}
+          CBMS Dashboard {APP_VERSION}-{APP_INITIAL}
         </p>
       </div>
     </div>
