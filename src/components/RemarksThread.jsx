@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { MdSend } from "react-icons/md";
 import PersonnelChip from "./PersonnelChip";
 import { getPersonnelColor } from "../utils/personnelColors";
-import { useContext } from "react";
 import { AppContext } from "../context/AppContext";
 import { formatDisplayDateTime } from "../utils/formatters";
 
@@ -15,6 +14,47 @@ function initialsFor(name) {
   if (!trimmed) return "?";
   const parts = trimmed.split(/\s+/);
   return ((parts[0]?.[0] || "") + (parts[1]?.[0] || "")).toUpperCase() || trimmed[0].toUpperCase();
+}
+
+function normalizeText(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function isOwnRemark(remark, currentUser) {
+  if (!remark || !currentUser) return false;
+
+  const currentIds = [currentUser.id, currentUser.user_id, currentUser.userId, currentUser.uid, currentUser.authId]
+    .map(normalizeText)
+    .filter(Boolean);
+  const remarkIds = [remark.authorId, remark.author_id, remark.userId, remark.user_id, remark.createdBy, remark.created_by]
+    .map(normalizeText)
+    .filter(Boolean);
+
+  if (currentIds.length && remarkIds.some(id => currentIds.includes(id))) {
+    return true;
+  }
+
+  const currentValues = [
+    currentUser.name,
+    currentUser.full_name,
+    currentUser.fullName,
+    currentUser.username,
+    currentUser.email,
+    currentUser.user_metadata?.full_name,
+    currentUser.user_metadata?.name,
+  ].map(normalizeText).filter(Boolean);
+
+  const remarkValues = [
+    remark.authorName,
+    remark.author_name,
+    remark.author?.name,
+    remark.author?.full_name,
+    remark.author?.fullName,
+    remark.author?.username,
+    remark.author?.email,
+  ].map(normalizeText).filter(Boolean);
+
+  return currentValues.some(value => remarkValues.includes(value));
 }
 
 /**
@@ -59,6 +99,8 @@ export default function RemarksThread({ remarks = [], onAdd, loading = false, di
   const [draft, setDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const ctx = useContext(AppContext);
+  const currentUser = ctx?.user ?? null;
   const listRef = useRef(null);
   const bottomRef = useRef(null);
   const prevCountRef = useRef(remarks.length);
@@ -102,27 +144,44 @@ export default function RemarksThread({ remarks = [], onAdd, loading = false, di
     <div className="space-y-2">
       <div
         ref={listRef}
-        className={`rounded-md border border-slate-100 bg-slate-50 divide-y divide-slate-100 overflow-y-auto ${compact ? "max-h-40" : "max-h-64"}`}
+        className={`rounded-xl border border-slate-200 bg-slate-50/70 overflow-y-auto px-2.5 py-2.5 ${compact ? "max-h-40" : "max-h-72"}`}
       >
         {loading ? (
           <p className="px-2.5 py-2 text-xs text-slate-400">Loading remarks…</p>
         ) : remarks.length === 0 ? (
           <p className="px-2.5 py-2 text-xs text-slate-400">No remarks yet.</p>
         ) : (
-          remarks.map(r => (
-            <div key={r.id} data-remark-id={r.id} className="px-2.5 py-2 flex items-start gap-2">
-              <RemarkAvatar name={r.authorName} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2 mb-0.5">
-                  <PersonnelChip name={r.authorName} size="xs" />
-                  <span className="text-[10px] text-slate-400 whitespace-nowrap">{formatTimestamp(r.createdAt)}</span>
+          <div className="flex flex-col gap-2.5">
+            {remarks.map(r => {
+              const fromMe = isOwnRemark(r, currentUser);
+              return (
+                <div key={r.id} data-remark-id={r.id} className={`flex ${fromMe ? "justify-end" : "justify-start"}`}>
+                  <div className={`flex max-w-[85%] items-end gap-2 ${fromMe ? "flex-row-reverse" : "flex-row"}`}>
+                    {!fromMe && (
+                      <div className="shrink-0">
+                        <RemarkAvatar name={r.authorName} />
+                      </div>
+                    )}
+                    <div className={`min-w-0 ${fromMe ? "text-right" : "text-left"}`}>
+                      {!fromMe && (
+                        <div className="mb-1.5 flex items-center gap-1.5">
+                          <PersonnelChip name={r.authorName} size="xs" />
+                        </div>
+                      )}
+                      <div className={`rounded-2xl px-3 py-2 shadow-sm border ${fromMe ? "bg-sky-500 text-white border-sky-500" : "bg-white border-slate-200 text-slate-700"}`}>
+                        {/* whitespace-pre-wrap preserves line breaks, blank lines,
+                            and indentation exactly as the author typed them. */}
+                        <p className="text-xs whitespace-pre-wrap break-words">{r.content}</p>
+                      </div>
+                      <div className={`mt-1 text-[10px] ${fromMe ? "text-right text-slate-400" : "text-left text-slate-400"}`}>
+                        {formatTimestamp(r.createdAt)}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                {/* whitespace-pre-wrap preserves line breaks, blank lines,
-                    and indentation exactly as the author typed them. */}
-                <p className="text-xs text-slate-700 whitespace-pre-wrap break-words">{r.content}</p>
-              </div>
-            </div>
-          ))
+              );
+            })}
+          </div>
         )}
         <div ref={bottomRef} />
       </div>
