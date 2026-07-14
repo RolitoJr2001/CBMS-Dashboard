@@ -22,6 +22,7 @@
 // to getPersonnelColor(). No such column exists today, so none of
 // the code below assumes one.
 
+<<<<<<< HEAD
 const FALLBACK = { key: "slate", bg: "bg-slate-100", text: "text-slate-600", dot: "bg-slate-400", border: "border-slate-200", ring: "ring-slate-200" };
 
 /**
@@ -29,16 +30,63 @@ const FALLBACK = { key: "slate", bg: "bg-slate-100", text: "text-slate-600", dot
  * When an Administrator has assigned a custom color, that color is used
  * everywhere. Without a custom assignment, the UI falls back to a neutral
  * default so no fixed viewer-color palette remains in effect.
+=======
+const PALETTE = [
+  { key: "red",     bg: "bg-rose-100",    text: "text-rose-700",    dot: "bg-rose-500",    border: "border-rose-200",    ring: "ring-rose-200" },
+  { key: "blue",    bg: "bg-blue-100",    text: "text-blue-700",    dot: "bg-blue-500",    border: "border-blue-200",    ring: "ring-blue-200" },
+  { key: "green",   bg: "bg-emerald-100", text: "text-emerald-700", dot: "bg-emerald-500", border: "border-emerald-200", ring: "ring-emerald-200" },
+  { key: "purple",  bg: "bg-purple-100",  text: "text-purple-700",  dot: "bg-purple-500",  border: "border-purple-200",  ring: "ring-purple-200" },
+  { key: "orange",  bg: "bg-orange-100",  text: "text-orange-700",  dot: "bg-orange-500",  border: "border-orange-200",  ring: "ring-orange-200" },
+  { key: "pink",    bg: "bg-pink-100",    text: "text-pink-700",    dot: "bg-pink-500",    border: "border-pink-200",    ring: "ring-pink-200" },
+  { key: "indigo",  bg: "bg-indigo-100",  text: "text-indigo-700",  dot: "bg-indigo-500",  border: "border-indigo-200",  ring: "ring-indigo-200" },
+  { key: "amber",   bg: "bg-amber-100",   text: "text-amber-700",   dot: "bg-amber-500",   border: "border-amber-200",   ring: "ring-amber-200" },
+  { key: "cyan",    bg: "bg-cyan-100",    text: "text-cyan-700",    dot: "bg-cyan-500",    border: "border-cyan-200",    ring: "ring-cyan-200" },
+  { key: "lime",    bg: "bg-lime-100",    text: "text-lime-700",    dot: "bg-lime-500",    border: "border-lime-200",    ring: "ring-lime-200" },
+];
+
+const FALLBACK = { key: "slate", bg: "bg-slate-100", text: "text-slate-600", dot: "bg-slate-400", border: "border-slate-200", ring: "ring-slate-200" };
+
+// Simple, deterministic string hash (djb2 variant). Same input always
+// produces the same output, which is what makes the color "stick" to
+// a given name across every screen in the app.
+function hashString(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 33) ^ str.charCodeAt(i);
+  }
+  return Math.abs(hash);
+}
+
+/**
+ * Returns a stable color palette entry for a given personnel name.
+ * @param {string} name - Personnel display name.
+ * @param {{ role?: string }} [opts] - Pass role: "admin" to force red.
+>>>>>>> f1a9aac09ca14ae0e2691f2bfe82ea16bd0502fd
  */
 export function getPersonnelColor(name, opts = {}) {
   const normalized = String(name || "").trim().toLowerCase();
   if (!normalized) return FALLBACK;
 
+<<<<<<< HEAD
+=======
+  // A custom hex color (picked by the Administrator in Personnel Manager)
+  // always wins over the deterministic hash — this is what makes colors
+  // customizable instead of purely automatic.
+>>>>>>> f1a9aac09ca14ae0e2691f2bfe82ea16bd0502fd
   if (opts.customColor && isValidHexColor(opts.customColor)) {
     return hexToChipColor(opts.customColor);
   }
 
+<<<<<<< HEAD
   return FALLBACK;
+=======
+  if (String(opts.role || "").toLowerCase() === "admin") {
+    return PALETTE[0]; // red, per the spec's Admin example
+  }
+
+  const index = hashString(normalized) % PALETTE.length;
+  return PALETTE[index];
+>>>>>>> f1a9aac09ca14ae0e2691f2bfe82ea16bd0502fd
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -129,3 +177,7 @@ export function getPersonnelOptionStyle(customColor) {
   return { backgroundColor: `${normalizeHex(customColor)}26` }; // ~15% alpha tint
 }
 
+<<<<<<< HEAD
+=======
+export { PALETTE };
+>>>>>>> f1a9aac09ca14ae0e2691f2bfe82ea16bd0502fd

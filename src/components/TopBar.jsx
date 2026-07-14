@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { MdNotifications, MdSearch, MdShield } from "react-icons/md";
 import { useApp } from "../context/AppContext";
 import PersonnelChip from "./PersonnelChip";
+<<<<<<< HEAD
 import { formatDisplayDateTime, formatDisplayTime } from "../utils/formatters";
+=======
+>>>>>>> f1a9aac09ca14ae0e2691f2bfe82ea16bd0502fd
 
 // Search keyword → tab id mapping
 const SEARCH_MAP = {

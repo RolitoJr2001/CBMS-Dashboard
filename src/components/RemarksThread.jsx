@@ -4,10 +4,24 @@ import PersonnelChip from "./PersonnelChip";
 import { getPersonnelColor } from "../utils/personnelColors";
 import { useContext } from "react";
 import { AppContext } from "../context/AppContext";
+<<<<<<< HEAD
 import { formatDisplayDateTime } from "../utils/formatters";
 
 function formatTimestamp(value) {
   return formatDisplayDateTime(value);
+=======
+
+function formatTimestamp(value) {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleString("en-US", {
+      month: "short", day: "numeric", year: "numeric",
+      hour: "numeric", minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+>>>>>>> f1a9aac09ca14ae0e2691f2bfe82ea16bd0502fd
 }
 
 function initialsFor(name) {
