@@ -312,7 +312,15 @@ export default function TaskPanel() {
                 role="button"
                 tabIndex={0}
                 onClick={() => setSelectedTaskId(task.id)}
-                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedTaskId(task.id); } }}
+                onKeyDown={e => {
+                  const target = e.target;
+                  const isEditableTarget = target instanceof HTMLElement && target.closest("input, textarea, select, button, [contenteditable='true'], [role='textbox']")
+                  if (isEditableTarget) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedTaskId(task.id);
+                  }
+                }}
                 className={`rounded-xl border p-3.5 space-y-2 transition-shadow cursor-pointer hover:shadow-cardHover ${dueStatus.level === "normal" ? "border-slate-100" : dueStatus.borderClass} ${highlightedTaskId === task.id ? "ring-2 ring-teal-400 shadow-cardHover" : ""}`}
               >
                 <div className="flex items-start justify-between gap-2">
