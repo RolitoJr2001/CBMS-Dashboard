@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MdAssignment, MdAdd, MdEdit, MdDelete, MdPending, MdHourglassEmpty, MdFlag, MdAttachFile } from "react-icons/md";
 import { useApp } from "../context/AppContext";
 import { fetchProfiles } from "../services/authService";
@@ -46,6 +46,7 @@ export default function TaskPanel() {
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const formRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -88,6 +89,15 @@ export default function TaskPanel() {
   }, [isAdmin, tasks, currentUserValues]);
 
   const [highlightedTaskId, setHighlightedTaskId] = useState(null);
+
+  // Auto-scroll to edit form when it opens
+  useEffect(() => {
+    if (showForm && formRef.current && editTaskId) {
+      setTimeout(() => {
+        formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
+  }, [showForm, editTaskId]);
 
   useEffect(() => {
     if (!focusTarget || focusTarget.entityType !== "task") return;
@@ -197,30 +207,54 @@ export default function TaskPanel() {
         )}
       </div>
       {showForm && isAdmin && (
-        <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-4 space-y-3">
+        <div ref={formRef} className="rounded-xl border border-teal-200 bg-teal-50/40 p-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Task Title *</label>
-              <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="w-full px-4 py-3 text-sm rounded-2xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm" />
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Task Title *</label>
+              <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm" />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Description</label>
-              <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} className="w-full px-4 py-3 text-sm rounded-2xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm resize-none" />
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Description</label>
+              <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm resize-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Status</label>
+              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm">
+                {STATUS_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Priority</label>
+              <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))} className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm">
+                {PRIORITY_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Due Date</label>
+              <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Attachment</label>
+              <input
+                type="file"
+                onChange={e => setAttachmentFile(e.target.files?.[0] || null)}
+                className="w-full text-xs text-slate-600 file:mr-2 file:px-2.5 file:py-1.5 file:rounded-lg file:border-0 file:bg-teal-50 file:text-teal-700 file:text-[11px] file:font-medium hover:file:bg-teal-100"
+              />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Remarks {editTaskId ? "(adds a new remark to the history)" : "(optional first remark)"}</label>
-              <textarea value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} rows={3} className="w-full px-4 py-3 text-sm rounded-2xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm resize-none" placeholder="Add a remark for this task" />
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Remarks {editTaskId ? "(adds new remark)" : "(optional)"}</label>
+              <textarea value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} rows={2} className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm resize-none" placeholder="Add a remark for this task" />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Assign To</label>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Assign To</label>
               <div className="flex gap-2">
                 <select
                   value={selectedPersonnelName}
                   onChange={(e) => setSelectedPersonnelName(e.target.value)}
                   disabled={personnelLoading}
-                  className="flex-1 px-4 py-3 text-sm rounded-2xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm"
+                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm"
                 >
-                  <option value="">{personnelLoading ? "Loading profiles..." : "Select person"}</option>
+                  <option value="">{personnelLoading ? "Loading..." : "Select person"}</option>
                   {personnelOptions
                     .filter(person => !form.assignedTo.includes(person.name))
                     .map(person => (
@@ -245,13 +279,13 @@ export default function TaskPanel() {
                     }));
                     setSelectedPersonnelName("");
                   }}
-                  className="inline-flex items-center justify-center px-4 py-3 rounded-2xl bg-teal-600 text-white hover:bg-teal-700 transition-colors shadow-sm"
+                  className="inline-flex items-center justify-center px-3 py-2 rounded-xl bg-teal-600 text-white hover:bg-teal-700 transition-colors shadow-sm shrink-0"
                 >
                   <MdAdd className="text-base" />
                 </button>
               </div>
               {form.assignedTo.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-2 flex flex-wrap gap-1.5">
                   {form.assignedTo.map(person => (
                     <PersonnelChip
                       key={person}
@@ -262,38 +296,14 @@ export default function TaskPanel() {
                 </div>
               )}
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
-              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className="w-full px-4 py-3 text-sm rounded-2xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm">
-                {STATUS_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Due Date</label>
-              <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} className="w-full px-4 py-3 text-sm rounded-2xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Priority</label>
-              <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))} className="w-full px-4 py-3 text-sm rounded-2xl border border-slate-200 outline-none focus:border-teal-400 bg-white shadow-sm">
-                {PRIORITY_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
-              </select>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Attachment (optional)</label>
-              <input
-                type="file"
-                onChange={e => setAttachmentFile(e.target.files?.[0] || null)}
-                className="w-full text-xs text-slate-600 file:mr-3 file:px-3 file:py-2 file:rounded-xl file:border-0 file:bg-teal-50 file:text-teal-700 file:text-xs file:font-medium hover:file:bg-teal-100"
-              />
-              {attachmentFile && <p className="mt-1 text-[11px] text-slate-500">Selected: {attachmentFile.name}</p>}
-              {editTaskId && !attachmentFile && form.hasAttachment && <p className="mt-1 text-[11px] text-slate-500">This task already has an attachment. Choose a file to replace it.</p>}
-            </div>
           </div>
+          {attachmentFile && <p className="text-[10px] text-slate-500">Selected: {attachmentFile.name}</p>}
+          {editTaskId && !attachmentFile && form.hasAttachment && <p className="text-[10px] text-slate-500">Has existing attachment</p>}
           {uploadingAttachment && <p className="text-xs text-slate-500">Uploading attachment…</p>}
           {saveErr && <p className="text-xs text-status-red">{saveErr}</p>}
-          <div className="flex justify-end gap-2">
-            <button onClick={() => { setShowForm(false); setSaveErr(""); setEditTaskId(null); setAttachmentFile(null); }} className="px-3 py-1.5 rounded-2xl border border-slate-200 text-slate-600 text-sm">Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="px-3 py-1.5 rounded-2xl bg-navy-900 text-white text-sm disabled:opacity-60">{saving ? "Saving..." : editTaskId ? "Update Task" : "Save Task"}</button>
+          <div className="flex justify-end gap-2 pt-1">
+            <button onClick={() => { setShowForm(false); setSaveErr(""); setEditTaskId(null); setAttachmentFile(null); }} className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50">Cancel</button>
+            <button onClick={handleSave} disabled={saving} className="px-3 py-1.5 rounded-lg bg-navy-900 text-white text-xs font-medium hover:bg-navy-800 disabled:opacity-60">{saving ? "Saving..." : editTaskId ? "Update" : "Create"}</button>
           </div>
         </div>
       )}
@@ -301,7 +311,7 @@ export default function TaskPanel() {
       {myTasks.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">No tasks assigned yet.</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
           {myTasks.map(task => {
             const dueStatus = getDueDateStatus(task.dueDate, task.status);
             const assignedList = Array.isArray(task.assignedTo) ? task.assignedTo.filter(Boolean) : [task.assignedTo].filter(Boolean);
@@ -321,99 +331,105 @@ export default function TaskPanel() {
                     setSelectedTaskId(task.id);
                   }
                 }}
-                className={`rounded-xl border p-3.5 space-y-2 transition-shadow cursor-pointer hover:shadow-cardHover ${dueStatus.level === "normal" ? "border-slate-100" : dueStatus.borderClass} ${highlightedTaskId === task.id ? "ring-2 ring-teal-400 shadow-cardHover" : ""}`}
+                className={`rounded-lg border p-2.5 space-y-2 transition-shadow cursor-pointer hover:shadow-card ${task.status === "Completed"? "border-status-green bg-status-greenBg/10"
+                  : dueStatus.level === "normal"
+                        ? "border-slate-100"
+                        : dueStatus.borderClass
+                  } ${
+                    highlightedTaskId === task.id
+                      ? "ring-2 ring-teal-400 shadow-card"
+                      : ""
+                  }`}
               >
+                {/* Task title + attachment icon */}
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-navy-900 truncate flex items-center gap-1.5">
-                      {task.title}
-                      {task.attachmentPath && <MdAttachFile className="text-slate-400 text-sm shrink-0" title="Has an attachment" />}
-                    </p>
-                    <p className="text-xs text-slate-500 line-clamp-2">{task.description || "No description provided."}</p>
-                  </div>
-                  <div className="shrink-0 flex flex-col items-end gap-1">
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${task.status === "Completed" ? "bg-status-greenBg text-status-green" : task.status === "Ongoing" || task.status === "In Progress" ? "bg-status-yellowBg text-status-yellow" : task.status === "Pending" ? "bg-status-redBg text-status-red" : "bg-slate-100 text-slate-600"}`}>
-                      {task.status}
-                    </span>
-                    <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${PRIORITY_BADGE[task.priority] || PRIORITY_BADGE.Medium}`}>
-                      <MdFlag className="text-[10px]" /> {task.priority || "Medium"}
-                    </span>
-                  </div>
+                  <h4 className="text-sm font-semibold text-navy-900 truncate flex items-center gap-1.5">
+                    {task.title}
+                    {task.attachmentPath && <MdAttachFile className="text-slate-400 text-xs shrink-0" title="Has attachment" />}
+                  </h4>
+                  {isAdmin && (
+                    <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditTaskId(task.id);
+                          setForm({
+                            title: task.title,
+                            description: task.description || "",
+                            assignedTo: Array.isArray(task.assignedTo) ? task.assignedTo : [task.assignedTo].filter(Boolean),
+                            dueDate: task.dueDate || "",
+                            status: task.status || "Not Started",
+                            priority: task.priority || "Medium",
+                            remarks: "",
+                            hasAttachment: Boolean(task.attachmentPath),
+                          });
+                          setSelectedPersonnelName("");
+                          setAttachmentFile(null);
+                          setShowForm(true);
+                        }}
+                        className="inline-flex items-center justify-center rounded p-1 text-slate-600 hover:bg-slate-100 transition-colors shrink-0"
+                        aria-label="Edit task"
+                      >
+                        <MdEdit className="text-xs" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();  
+                          handleDelete(task.id)}}      
+                        className="inline-flex items-center justify-center rounded p-1 text-status-red hover:bg-status-red/10 transition-colors shrink-0"
+                        aria-label="Delete task"
+                      >
+                        <MdDelete className="text-xs" />
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-500">
-                  <span className="flex items-center gap-1"><MdPending />
-                    {assignedList.length ? (
-                      <span className="flex flex-wrap gap-1">
-                        {assignedList.map(person => (
-                          <PersonnelChip key={person} name={person} role={isAdmin && assignedList.length === 1 && person === user?.name ? "admin" : undefined} size="xs" />
-                        ))}
-                      </span>
-                    ) : "Unassigned"}
+
+                {/* Description preview */}
+                <p className="text-xs text-slate-600 line-clamp-1">{task.description || "—"}</p>
+
+                {/* Status + Priority on same line */}
+                <div className="flex items-center justify-between gap-2">
+                  <select value={task.status} onClick={(e) => e.stopPropagation()} onChange={(e) => handleStatusChange(task.id, e.target.value)} className="text-xs px-2 py-1 rounded border border-slate-200 bg-white w-fit max-w-[120px]">
+                    {STATUS_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${PRIORITY_BADGE[task.priority] || PRIORITY_BADGE.Medium}`}>
+                    <MdFlag className="inline text-[9px] mr-0.5" />{task.priority || "Medium"}
                   </span>
-                  <span className={`flex items-center gap-1 font-medium ${dueStatus.textClass}`}>
-                    <MdHourglassEmpty /> {task.dueDate || "No due date"}
+                </div>
+
+                {/* Assigned + Due date on same line */}
+                <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
+                  <div className="flex items-center gap-1 min-w-0">
+                    <MdPending className="shrink-0" />
+                    <div className="flex flex-wrap gap-1 min-w-0">
+                      {assignedList.length ? (
+                        assignedList.slice(0, 2).map(person => (
+                          <PersonnelChip key={person} name={person} size="xs" />
+                        ))
+                      ) : "Unassigned"}
+                      {assignedList.length > 2 && <span className="text-[9px] text-slate-400">+{assignedList.length - 2}</span>}
+                    </div>
+                  </div>
+                  <div className={`flex items-center gap-1 whitespace-nowrap shrink-0 font-medium ${dueStatus.textClass}`}>
+                    <MdHourglassEmpty className="text-[9px]" /> {task.dueDate || "—"}
                     {dueStatus.label && (
-                      <span className={`ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${dueStatus.badgeBg} ${dueStatus.badgeText}`}>
+                      <span className={`text-[9px] font-semibold px-1 py-0.5 rounded-full whitespace-nowrap ${dueStatus.badgeBg} ${dueStatus.badgeText}`}>
                         {dueStatus.label}
                       </span>
                     )}
-                  </span>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-2 pt-1">
-                  <select value={task.status} onClick={(e) => e.stopPropagation()} onChange={(e) => handleStatusChange(task.id, e.target.value)} className="text-xs px-2 py-1 rounded border border-slate-200 bg-white w-fit">
-                    {STATUS_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
-                  </select>
-                  <div onClick={e => e.stopPropagation()}>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-1">Remarks</p>
-                    <RemarksThread
-                      remarks={remarksByTask[task.id] || []}
-                      loading={remarksLoading.tasks}
-                      onAdd={(content) => addTaskRemark(task.id, content)}
-                      autoScrollToLatest={highlightedTaskId === task.id}
-                      compact
-                    />
-                  </div>
-                  <div className="flex justify-between items-center gap-2">
-                    <p className="text-[10px] text-slate-400 truncate">By {task.assignedBy || "Admin"}</p>
-                    <div className="flex items-center gap-1">
-                      {isAdmin && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditTaskId(task.id);
-                            setForm({
-                              title: task.title,
-                              description: task.description || "",
-                              assignedTo: Array.isArray(task.assignedTo) ? task.assignedTo : [task.assignedTo].filter(Boolean),
-                              dueDate: task.dueDate || "",
-                              status: task.status || "Not Started",
-                              priority: task.priority || "Medium",
-                              remarks: "",
-                              hasAttachment: Boolean(task.attachmentPath),
-                            });
-                            setSelectedPersonnelName("");
-                            setAttachmentFile(null);
-                            setShowForm(true);
-                          }}
-                          className="inline-flex items-center justify-center rounded-full p-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
-                          aria-label="Edit task"
-                        >
-                          <MdEdit className="text-sm" />
-                        </button>
-                      )}
-                      {isAdmin && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();  
-                            handleDelete(task.id)}}      
-                          className="inline-flex items-center justify-center rounded-full p-1.5 text-status-red hover:bg-status-red/10 transition-colors"
-                          aria-label="Delete task"
-                        >
-                          <MdDelete className="text-sm" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
+
+                {/* Remarks preview - compact */}
+                <div onClick={e => e.stopPropagation()} className="pt-1 border-t border-slate-100">
+                  <RemarksThread
+                    remarks={remarksByTask[task.id] || []}
+                    loading={remarksLoading.tasks}
+                    onAdd={(content) => addTaskRemark(task.id, content)}
+                    autoScrollToLatest={highlightedTaskId === task.id}
+                    compact
+                  />
                 </div>
               </div>
             );
