@@ -42,6 +42,48 @@ export const folders = [
     updated: "2026-06-17",
     link: "https://drive.google.com/drive/folders/1pOP_DyGNtpt-VSqkjsP-jw-6LIPfdBqs?usp=drive_link",
   },
+    {
+    id: 7,
+    name: "CBMSD Incoming-Outgoing",
+    items: 30,
+    updated: "2026-06-17",
+    link: "https://drive.google.com/drive/folders/1Sos_SM2Af9YWxc22Yj-2DLqrwz763wh_?usp=drive_link",
+  },
+    {
+    id: 8,
+    name: "CBMSD Office Order",
+    items: 29,
+    updated: "2026-06-17",
+    link: "https://drive.google.com/drive/folders/13xBRvdiTNozNhUcGY7VZkuYYQnMOf5cq?usp=drive_link",
+  },
+  {
+    id: 9,
+    name: "Letters",
+    items: 29,
+    updated: "2026-06-17",
+    link: "https://drive.google.com/drive/folders/1Be3ghZYKga6cE0zX1dD2N6q8x92_SdIJ?usp=drive_link",
+  },
+  {
+    id: 10,
+    name: "Endorsements",
+    items: 29,
+    updated: "2026-06-17",
+    link: "https://drive.google.com/drive/folders/1gZ50__OGlacp1ISXm4-S4QwNeL4hjGhx?usp=drive_link",
+  },
+  {
+    id: 11,
+    name: "Templates",
+    items: 29,
+    updated: "2026-06-17",
+    link: "https://drive.google.com/drive/folders/1eeL5z982wpNOM-X7t0M-kNlamewRpJoZ?usp=drive_link",
+  },
+  {
+    id: 12,
+    name: "Legal Documents",
+    items: 29,
+    updated: "2026-06-17",
+    link: "https://drive.google.com/drive/folders/1CDY9y3N3sbj1RFsuPhV3IQdJknWq3j8e?usp=drive_link",
+  },
 ];
 
 // CBMS Monitoring Dashboard sheets
