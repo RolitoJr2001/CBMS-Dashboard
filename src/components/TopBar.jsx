@@ -1,20 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MdNotifications, MdSearch, MdShield } from "react-icons/md";
 import { useApp } from "../context/AppContext";
+import { useGlobalSearch } from "../hooks/useGlobalSearch";
 import PersonnelChip from "./PersonnelChip";
+import SearchDropdown from "./SearchDropdown";
 import { formatDisplayDateTime, formatDisplayTime } from "../utils/formatters";
 
-// Search keyword → tab id mapping
-const SEARCH_MAP = {
-  calendar:    "calendar",    schedule:  "calendar",    event:    "calendar",
-  checklist:   "checklist",   requirement: "checklist", compliance: "checklist",
-  folder:      "folder-directory", drive: "folder-directory",
-  monitoring:  "monitoring",  sheet:    "monitoring",
-  document:    "document-tracking", tracking: "document-tracking",
-  announcement:"announcements",
-  analytics:   "analytics",   report:   "analytics",
-  link:        "quick-access", access:  "quick-access",
-};
+// Removed: old SEARCH_MAP - now using global search index
 
 function formatNotificationTime(value) {
   return formatDisplayDateTime(value);
@@ -47,12 +39,75 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
     markAllNotificationsRead,
     deleteNotification,
     openNotification,
+    tasks,
+    events,
+    requirements,
+    personnel,
   } = useApp();
+
+  // Global search setup
+  const searchData = {
+    tasks,
+    documents,
+    events,
+    requirements,
+    personnel,
+    announcements: [], // Can add if available in AppContext
+    quickLinks: [], // Can add if available in AppContext
+    notifications: notifications.slice(0, 10), // Recent notifications only
+  };
+
+  const {
+    query,
+    setQuery,
+    results,
+    selectedIndex,
+    isOpen,
+    setIsOpen,
+    handleKeyDown,
+  } = useGlobalSearch(searchData, 300);
+
+  const searchInputRef = useRef(null);
   const isAdmin = user?.role === "admin";
   const currentRole = isAdmin ? "admin" : "viewer";
   const [notifOpen, setNotifOpen] = useState(false);
-  const [searchVal, setSearchVal] = useState("");
   const [dismissedIds, setDismissedIds] = useState([]);
+
+  // Handle search result selection
+  function handleSearchSelect(result) {
+    // Navigate based on result type
+    const pageMap = {
+      task: "tasks",
+      document: "document-tracking",
+      event: "calendar",
+      requirement: "checklist",
+      personnel: null,
+      quicklink: result.metadata?.page || null,
+      notification: null,
+    };
+
+    const targetPage = pageMap[result.type];
+    if (targetPage && onNavigate) {
+      onNavigate(targetPage);
+    }
+
+    // Scroll to highlight specific items
+    if (result.metadata?.taskId) {
+      setTimeout(() => {
+        const taskElement = document.getElementById(`task-card-${result.metadata.taskId}`);
+        if (taskElement) {
+          taskElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 100);
+    }
+
+    // Clear search
+    setQuery("");
+    setIsOpen(false);
+    if (searchInputRef.current) {
+      searchInputRef.current.blur();
+    }
+  }
 
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "short", month: "short", day: "numeric", year: "numeric",
@@ -115,20 +170,6 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
     setDismissedIds(prev => (prev.includes(id) ? prev : [...prev, id]));
   }
 
-  function handleSearch(e) {
-    e.preventDefault();
-    if (!searchVal.trim()) return;
-    const q = searchVal.toLowerCase();
-    const localMap = { ...SEARCH_MAP };
-    if (!isAdmin) {
-      delete localMap.link;
-      delete localMap.access;
-    }
-    const match = Object.entries(localMap).find(([k]) => q.includes(k));
-    if (match && onNavigate) onNavigate(match[1]);
-    setSearchVal("");
-  }
-
   return (
     <>
       {notificationWarning && (
@@ -150,16 +191,29 @@ export default function TopBar({ pageTitle, pageDesc, onNavigate }) {
 
       {/* Right: search + date + notif + user */}
       <div className="ml-auto flex items-center gap-3 shrink-0">
-        {/* Search — now switches tabs instead of scrolling */}
-        <form onSubmit={handleSearch} className="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-          <MdSearch className="text-slate-400 text-base shrink-0" />
-          <input
-            value={searchVal}
-            onChange={e => setSearchVal(e.target.value)}
-            placeholder="Search..."
-            className="bg-transparent text-sm text-navy-900 placeholder-slate-400 outline-none w-36"
+        {/* Global Search with Autocomplete */}
+        <div className="hidden md:relative md:flex items-center">
+          <div className="relative flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+            <MdSearch className="text-slate-400 text-base shrink-0" />
+            <input
+              ref={searchInputRef}
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onFocus={() => setIsOpen(true)}
+              placeholder="Search..."
+              className="bg-transparent text-sm text-navy-900 placeholder-slate-400 outline-none w-48"
+            />
+          </div>
+          {/* Search Results Dropdown */}
+          <SearchDropdown
+            results={results}
+            selectedIndex={selectedIndex}
+            isOpen={isOpen}
+            onSelect={handleSearchSelect}
+            onClose={() => setIsOpen(false)}
           />
-        </form>
+        </div>
 
         {/* Date */}
         <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 border border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50">

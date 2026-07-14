@@ -168,7 +168,7 @@ export default function RemarksThread({ remarks = [], onAdd, loading = false, di
                           <PersonnelChip name={r.authorName} size="xs" />
                         </div>
                       )}
-                      <div className={`rounded-2xl px-3 py-2 shadow-sm border ${fromMe ? "bg-sky-500 text-white border-sky-500" : "bg-white border-slate-200 text-slate-700"}`}>
+                      <div className={`rounded-2xl px-3 py-1 shadow-sm border ${fromMe ? "bg-sky-500 text-white border-sky-500" : "bg-white border-slate-200 text-slate-700"}`}>
                         {/* whitespace-pre-wrap preserves line breaks, blank lines,
                             and indentation exactly as the author typed them. */}
                         <p className="text-xs whitespace-pre-wrap break-words">{r.content}</p>
