@@ -157,10 +157,7 @@ export function AppProvider({ children }) {
   // (or rename/add/remove) shows up immediately everywhere a
   // <PersonnelChip> is rendered, with no page refresh.
   const [personnel, setPersonnel] = useState([]);
-<<<<<<< HEAD
   const [profiles, setProfiles] = useState([]);
-=======
->>>>>>> f1a9aac09ca14ae0e2691f2bfe82ea16bd0502fd
   // Clicking a notification navigates to its related task/document/event
   // and asks that section to scroll to + highlight the relevant item (and,
   // for remarks, the newest message). Consumers (TaskPanel, DocumentTracking,
@@ -182,7 +179,6 @@ export function AppProvider({ children }) {
 
   const embedUrl = calendarEmbedUrl;
 
-<<<<<<< HEAD
   // name (lowercased) -> hex color, built from the personnel table and
   // the linked viewer profiles so the same color is honored for any
   // displayed alias (name, username, full name, etc.).
@@ -215,15 +211,6 @@ export function AppProvider({ children }) {
 
     return map;
   }, [personnel, profiles]);
-=======
-  // name (lowercased) -> hex color, built from the personnel table. Read
-  // by PersonnelChip via AppContext so every chip anywhere in the app
-  // reflects the Administrator's custom color choice, if one is set.
-  const personnelColorMap = personnel.reduce((acc, p) => {
-    if (p?.name && p?.color) acc[String(p.name).trim().toLowerCase()] = p.color;
-    return acc;
-  }, {});
->>>>>>> f1a9aac09ca14ae0e2691f2bfe82ea16bd0502fd
 
   const loadPersonnel = useCallback(async () => {
     try {
@@ -234,7 +221,6 @@ export function AppProvider({ children }) {
   }, []);
 
   const updatePersonnelColor = useCallback(async (id, color) => {
-<<<<<<< HEAD
     let updated = null;
     try {
       updated = await updatePersonnelColorEntry(id, color);
@@ -247,8 +233,9 @@ export function AppProvider({ children }) {
 
     if (updated?.name) {
       const nextMap = { ...readStoredColorMap() };
-      addColorAlias(nextMap, updated.name, updated.color || null);
-      if (!updated.color) {
+      if (updated.color) {
+        addColorAlias(nextMap, updated.name, updated.color);
+      } else {
         delete nextMap[normalizeColorLookupValue(updated.name)];
         delete nextMap[normalizeColorLookupValue(updated.name).replace(/\s+/g, "")];
         delete nextMap[normalizeColorLookupValue(updated.name).replace(/[^a-z0-9]+/g, "")];
@@ -258,12 +245,6 @@ export function AppProvider({ children }) {
 
     return updated;
   }, [personnel]);
-=======
-    const updated = await updatePersonnelColorEntry(id, color);
-    setPersonnel(prev => prev.map(p => p.id === id ? updated : p));
-    return updated;
-  }, []);
->>>>>>> f1a9aac09ca14ae0e2691f2bfe82ea16bd0502fd
 
   const suppressNextRealtimeNotification = useCallback(() => {
     suppressRealtimeNotificationRef.current = true;

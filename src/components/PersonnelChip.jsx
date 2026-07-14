@@ -2,15 +2,11 @@ import { useContext } from "react";
 import { AppContext } from "../context/AppContext";
 import { getPersonnelColor } from "../utils/personnelColors";
 
-<<<<<<< HEAD
 function buildLookupKeys(value) {
   const base = String(value || "").trim().toLowerCase();
   if (!base) return [];
   return [base, base.replace(/\s+/g, ""), base.replace(/[^a-z0-9]+/g, "")].filter(Boolean);
 }
-
-=======
->>>>>>> f1a9aac09ca14ae0e2691f2bfe82ea16bd0502fd
 /**
  * Colored chip/tag for a personnel name. Used consistently across
  * Task cards, Assignment lists, Activity logs, Document assignments,
@@ -38,7 +34,6 @@ export default function PersonnelChip({ name, role, size = "sm", onRemove, class
   const ctx = useContext(AppContext);
   if (!label) return null;
 
-<<<<<<< HEAD
   const lookupKeys = buildLookupKeys(label);
   const customColor = lookupKeys
     .map(key => ctx?.personnelColorMap?.[key])
@@ -48,9 +43,6 @@ export default function PersonnelChip({ name, role, size = "sm", onRemove, class
         .filter(Boolean);
       return values.some(value => lookupKeys.includes(value) || lookupKeys.includes(value.replace(/\s+/g, "")) || lookupKeys.includes(value.replace(/[^a-z0-9]+/g, "")));
     })?.color;
-=======
-  const customColor = ctx?.personnelColorMap?.[label.toLowerCase()];
->>>>>>> f1a9aac09ca14ae0e2691f2bfe82ea16bd0502fd
   const color = getPersonnelColor(label, { role, customColor });
 
   const sizeClasses = size === "xs"
