@@ -1,6 +1,6 @@
 git add .
 
-git commit -m "update the color personnel and time format-1 v1.0.3-rmi" 
+git commit -m "update the task panel UI v1.0.3-rmi" 
 
 git push origin main
 
